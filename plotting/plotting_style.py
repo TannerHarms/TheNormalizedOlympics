@@ -136,24 +136,24 @@ def apply_plot_style():
     # Tick settings
     mpl.rcParams['xtick.color'] = 'black'
     mpl.rcParams['ytick.color'] = 'black'
-    mpl.rcParams['xtick.labelsize'] = 13
-    mpl.rcParams['ytick.labelsize'] = 13
+    mpl.rcParams['xtick.labelsize'] = 15
+    mpl.rcParams['ytick.labelsize'] = 15
     mpl.rcParams['xtick.direction'] = 'out'
     mpl.rcParams['ytick.direction'] = 'out'
-    mpl.rcParams['xtick.major.width'] = 1.0
-    mpl.rcParams['ytick.major.width'] = 1.0
+    mpl.rcParams['xtick.major.width'] = 1.2
+    mpl.rcParams['ytick.major.width'] = 1.2
     
     # Font settings
     mpl.rcParams['font.family'] = 'serif'
     mpl.rcParams['font.serif'] = ['Times New Roman', 'DejaVu Serif', 'Liberation Serif', 'Times']
-    mpl.rcParams['font.size'] = 13
+    mpl.rcParams['font.size'] = 15
     
     # Legend settings
     mpl.rcParams['legend.frameon'] = True
     mpl.rcParams['legend.framealpha'] = 1.0
     mpl.rcParams['legend.edgecolor'] = 'black'
     mpl.rcParams['legend.facecolor'] = 'white'
-    mpl.rcParams['legend.fontsize'] = 12
+    mpl.rcParams['legend.fontsize'] = 14
     
     # Text settings
     mpl.rcParams['text.color'] = 'black'

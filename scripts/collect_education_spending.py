@@ -16,7 +16,7 @@ import time
 sys.path.append(str(Path(__file__).parent.parent))
 from scripts.country_mapping import NOC_TO_WB
 
-def fetch_indicator_data(country_code, indicator, start_year=1960, end_year=2024):
+def fetch_indicator_data(country_code, indicator, start_year=1960, end_year=2023):
     """
     Fetch a single indicator for a country from World Bank API.
     

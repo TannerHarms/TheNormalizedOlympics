@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from plotting.plotting_style import apply_plot_style, save_plot
 
 # Configuration
-START_YEAR = 2000  # Start year for analysis (inclusive)
+START_YEAR = 1992  # Start year for analysis (inclusive)
 END_YEAR = 2024  # End year for analysis (inclusive)
 TOP_N_COUNTRIES = 10  # Number of top/bottom countries to show
 MIN_PARTICIPATIONS = 4  # Minimum participations required to be included
@@ -106,79 +106,112 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
     else:
         most_recent_year = df_filtered['Year'].max()
     
-    # Filter for minimum criteria
-    if medal_type == 'Total_Athletes':
-        # For Total_Athletes, include all countries
-        qualified_countries = df_filtered['Country'].unique()
-    else:
-        # For medal types, use standard medal and participation filters
-        country_total_medals = df_filtered.groupby('Country')[medal_type].sum()
-        qualified_countries = country_total_medals[country_total_medals >= MIN_MEDALS].index
-        df_filtered = df_filtered[df_filtered['Country'].isin(qualified_countries)]
-        
-        # Count participations
-        country_participations = df_filtered.groupby('Country')['Year'].nunique()
-        qualified_countries = country_participations[country_participations >= MIN_PARTICIPATIONS].index
-        df_filtered = df_filtered[df_filtered['Country'].isin(qualified_countries)]
-    
     if len(df_filtered) == 0:
         print(f"No data for {season} Olympics")
         return
     
     print(f"\n{season} Olympics ({START_YEAR}-{END_YEAR}):")
-    if medal_type != 'Total_Athletes':
-        print(f"Countries with >={MIN_PARTICIPATIONS} participations and >={MIN_MEDALS} total medals: {len(qualified_countries)}")
-    else:
-        print(f"All countries: {len(qualified_countries)}")
+    print(f"All countries with data: {df_filtered['Country'].nunique()}")
     
-    # Get most recent Olympics data (before applying trend filter)
+    # Get most recent Olympics data for bar charts (NO FILTERS - show all countries)
     recent_df = df_filtered[df_filtered['Year'] == most_recent_year].copy()
     if len(recent_df) == 0:
         print(f"No data for most recent year {most_recent_year}")
         return
     
+    # For medal types (not Total_Athletes), filter out countries with zero medals in the specific year
+    # This prevents division by zero when calculating normalized bar heights
+    if medal_type != 'Total_Athletes':
+        recent_df = recent_df[recent_df['Total'] > 0].copy()
+        if len(recent_df) == 0:
+            print(f"No countries with medals in {most_recent_year}")
+            return
+    
+    # Now apply filters ONLY for trend line qualification
+    # These filters determine which countries appear in the trend plots, not the bar charts
+    if medal_type == 'Total_Athletes':
+        # For Total_Athletes, include all countries in trends
+        qualified_trend_countries = df_filtered['Country'].unique()
+    else:
+        # For medal types, use standard medal and participation filters FOR TRENDS ONLY
+        # For ratio metrics (Medals_Per_Athlete, Medals_Awarded_Per_Athlete), 
+        # we need to check the underlying medal count (Total) rather than summing ratios
+        if medal_type in ['Medals_Per_Athlete', 'Medals_Awarded_Per_Athlete']:
+            # Use Total medals for qualification check
+            country_total_medals = df_filtered.groupby('Country')['Total'].sum()
+        else:
+            # Use the actual medal type for qualification
+            country_total_medals = df_filtered.groupby('Country')[medal_type].sum()
+        
+        qualified_by_medals = country_total_medals[country_total_medals >= MIN_MEDALS].index
+        
+        # Count participations
+        country_participations = df_filtered.groupby('Country')['Year'].nunique()
+        qualified_by_participations = country_participations[country_participations >= MIN_PARTICIPATIONS].index
+        
+        # Intersection of both qualifications
+        qualified_trend_countries = qualified_by_medals.intersection(qualified_by_participations)
+        
+        print(f"Countries qualified for trends (>={MIN_PARTICIPATIONS} participations and >={MIN_MEDALS} total medals): {len(qualified_trend_countries)}")
+    
     # Calculate normalized medal counts for each medal type
     # Use the ratio of individual medal to total medals, scaled by the metric value
     total_norm = recent_df[metric_col]
-    # Show stacked Gold/Silver/Bronze for medal-related types
-    if medal_type in ['Total', 'Total_Medals_By_Event', 'Individual_Medalists', 'Total_Medals_Awarded']:
+    # Show stacked Gold/Silver/Bronze for medal-related types and ratio metrics
+    if medal_type in ['Total', 'Total_Medals_By_Event', 'Individual_Medalists', 'Total_Medals_Awarded', 
+                      'Medals_Per_Athlete', 'Medals_Awarded_Per_Athlete']:
         recent_df['Bronze_norm'] = (recent_df['Bronze'] / recent_df['Total']) * total_norm
         recent_df['Silver_norm'] = (recent_df['Silver'] / recent_df['Total']) * total_norm
         recent_df['Gold_norm'] = (recent_df['Gold'] / recent_df['Total']) * total_norm
         recent_df['NoMedal_norm'] = 0
     elif medal_type == 'Total_Athletes':
         # For Total_Athletes, show breakdown by medal type plus non-medalists
-        # Calculate proportion of athletes who are medalists
+        # Calculate proportion of athletes who are medalists (handle division by zero)
         medalists_proportion = recent_df['Individual_Medalists'] / recent_df['Total_Athletes']
         # Non-medalists proportion
         no_medal_proportion = 1 - medalists_proportion
+        
         # Break down medalists by medal type (using medal counts as proxy)
-        recent_df['Bronze_norm'] = total_norm * medalists_proportion * (recent_df['Bronze'] / recent_df['Total'])
-        recent_df['Silver_norm'] = total_norm * medalists_proportion * (recent_df['Silver'] / recent_df['Total'])
-        recent_df['Gold_norm'] = total_norm * medalists_proportion * (recent_df['Gold'] / recent_df['Total'])
+        # For countries with 0 total medals, set all medal bars to 0
+        medal_breakdown = recent_df['Total'] > 0
+        recent_df['Bronze_norm'] = 0.0
+        recent_df['Silver_norm'] = 0.0
+        recent_df['Gold_norm'] = 0.0
+        recent_df.loc[medal_breakdown, 'Bronze_norm'] = (
+            total_norm[medal_breakdown] * 
+            medalists_proportion[medal_breakdown] * 
+            (recent_df.loc[medal_breakdown, 'Bronze'] / recent_df.loc[medal_breakdown, 'Total'])
+        )
+        recent_df.loc[medal_breakdown, 'Silver_norm'] = (
+            total_norm[medal_breakdown] * 
+            medalists_proportion[medal_breakdown] * 
+            (recent_df.loc[medal_breakdown, 'Silver'] / recent_df.loc[medal_breakdown, 'Total'])
+        )
+        recent_df.loc[medal_breakdown, 'Gold_norm'] = (
+            total_norm[medal_breakdown] * 
+            medalists_proportion[medal_breakdown] * 
+            (recent_df.loc[medal_breakdown, 'Gold'] / recent_df.loc[medal_breakdown, 'Total'])
+        )
         recent_df['NoMedal_norm'] = total_norm * no_medal_proportion
-    else:
-        # For ratio metrics, show as single bar
-        recent_df['Bronze_norm'] = 0
-        recent_df['Silver_norm'] = 0
-        recent_df['Gold_norm'] = total_norm
-        recent_df['NoMedal_norm'] = 0
     
     recent_df['metric'] = recent_df[metric_col]
     recent_sorted = recent_df.sort_values('metric', ascending=False)
     
-    # Get top and bottom countries from most recent Olympics
+    # Get top and bottom countries from most recent Olympics (ALL countries, no filters)
     top_recent = recent_sorted.head(TOP_N_COUNTRIES)
     bottom_recent = recent_sorted.tail(TOP_N_COUNTRIES)
     
-    # Apply trend filter: require 3+ data points for meaningful trends
-    # This filters the data for trend plots, but NOT for bar charts
+    # Apply additional trend filter: require 3+ data points for meaningful trends
+    # This combines with the medal/participation filters already applied above
     num_years_in_data = df_filtered['Year'].nunique()
     min_required_years = min(3, num_years_in_data)  # Use 3 or all years if less than 3
     
-    country_counts = df_filtered.groupby('Country').size()
-    qualified_trend_countries = country_counts[country_counts >= min_required_years].index
-    df_trends = df_filtered[df_filtered['Country'].isin(qualified_trend_countries)]
+    # Filter to countries that meet BOTH the medal/participation requirements AND the 3+ year requirement
+    country_counts = df_filtered[df_filtered['Country'].isin(qualified_trend_countries)].groupby('Country').size()
+    final_trend_countries = country_counts[country_counts >= min_required_years].index
+    df_trends = df_filtered[df_filtered['Country'].isin(final_trend_countries)]
+    
+    print(f"Countries in trend lines (also require {min_required_years}+ years): {len(final_trend_countries)}")
     
     # Calculate metrics for trends: use MAX value instead of average for trend selection
     max_metrics = df_trends.groupby('Country')[metric_col].max().sort_values(ascending=False)
@@ -326,14 +359,33 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
     # ===== BOTTOM: Dual-axes trend plot =====
     ax2 = ax_bottom.twinx()
     
+    # Calculate medians for all selected countries and sort by median
+    # This ensures legend values are in order matching color intensity
+    top_country_medians = []
+    for country in top_trend_countries:
+        country_data = df_trends[df_trends['Country'] == country]
+        median_val = country_data[metric_col].median()
+        top_country_medians.append((country, median_val))
+    
+    # Sort by median descending for top performers (highest first)
+    top_country_medians.sort(key=lambda x: x[1], reverse=True)
+    
+    bottom_country_medians = []
+    for country in bottom_trend_countries:
+        country_data = df_trends[df_trends['Country'] == country]
+        median_val = country_data[metric_col].median()
+        bottom_country_medians.append((country, median_val))
+    
+    # Sort by median ascending for bottom performers (lowest first)
+    bottom_country_medians.sort(key=lambda x: x[1])
+    
     # Plot top performers
-    top_colors = [cm.Reds_r(0.7 * i / (len(top_trend_countries) - 1)) for i in range(len(top_trend_countries))]
+    top_colors = [cm.Reds_r(0.7 * i / (len(top_country_medians) - 1)) for i in range(len(top_country_medians))]
     top_lines = []
     top_labels = []
     
-    for idx, country in enumerate(top_trend_countries):
+    for idx, (country, median_medals) in enumerate(top_country_medians):
         country_data = df_trends[df_trends['Country'] == country].sort_values('Year')
-        median_medals = country_data[metric_col].median()
         
         line, = ax_bottom.plot(country_data['Year'], 
                                country_data[metric_col],
@@ -344,13 +396,12 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
         top_labels.append(f"{country}: {median_medals:.3f}")
     
     # Plot bottom performers
-    bottom_colors = [cm.Blues_r(0.7 * i / (len(bottom_trend_countries) - 1)) for i in range(len(bottom_trend_countries))]
+    bottom_colors = [cm.Blues_r(0.7 * i / (len(bottom_country_medians) - 1)) for i in range(len(bottom_country_medians))]
     bottom_lines = []
     bottom_labels = []
     
-    for idx, country in enumerate(bottom_trend_countries):
+    for idx, (country, median_medals) in enumerate(bottom_country_medians):
         country_data = df_trends[df_trends['Country'] == country].sort_values('Year')
-        median_medals = country_data[metric_col].median()
         
         line, = ax2.plot(country_data['Year'], 
                         country_data[metric_col],
@@ -443,12 +494,12 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
     
     coverage_pct = (countries_with_data / total_olympic_countries) * 100
     
-    coverage_text = f'Trend values show median. Coverage: {countries_with_data}/{total_olympic_countries} Olympic nations ({coverage_pct:.0f}%). '
+    coverage_text = f'Trend values show median. Coverage: {countries_with_data}/{total_olympic_countries} medal-winning nations in range ({START_YEAR}-{END_YEAR}) ({coverage_pct:.0f}%). '
     if metric_col == medal_type or metric_col == 'Total':
         if medal_type == 'Total_Athletes':
-            coverage_text += f'Showing all {len(qualified_countries)} countries with available data.'
+            coverage_text += f'Bar charts show all {len(recent_df)} countries from {most_recent_year}. Trend lines show all countries with 3+ years.'
         else:
-            coverage_text += f'Showing {len(qualified_countries)} countries meeting minimum criteria (≥{MIN_PARTICIPATIONS} participations, ≥{MIN_MEDALS} medals).'
+            coverage_text += f'Bar charts show all {len(recent_df)} countries from {most_recent_year}. Trend lines filtered (≥{MIN_PARTICIPATIONS} participations, ≥{MIN_MEDALS} medals, 3+ years).'
     elif metric_name in ['University', 'Sports Stadium', 'Ski Resort', 'Million Kg Coffee', 
                        'Million Cola Servings', '100 Work Hours Per Year', 'Peace Index Point',
                        '1000 Refugees Received', '1000 Refugees Produced', '1000 Military Personnel']:

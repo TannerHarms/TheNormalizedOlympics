@@ -1,0 +1,9 @@
+﻿<html><head><style>
+:root { --bg: #ffffff; --fg: #000000; }
+body.dark-theme { --bg: #1a1a2e; --fg: #e0e0e0; }
+</style></head><body>
+<script>
+function T(prop) { return getComputedStyle(document.documentElement).getPropertyValue(prop).trim(); }
+document.body.classList.add('dark-theme');
+console.log('bg=' + T('--bg'), 'fg=' + T('--fg'));
+</script></body></html>

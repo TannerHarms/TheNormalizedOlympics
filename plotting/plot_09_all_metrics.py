@@ -152,9 +152,9 @@ def main():
                             medal_type_display=medal_type_display
                         )
                         success_count += 1
-                        print(f"  ✓ Summer: {summer_data_count} data points")
+                        print(f"  [OK] Summer: {summer_data_count} data points")
                     except Exception as e:
-                        print(f"  ✗ Summer failed: {e}")
+                        print(f"  [FAIL] Summer failed: {e}")
                 else:
                     print(f"  - Summer: No data available")
                     skip_count += 1
@@ -176,9 +176,9 @@ def main():
                             medal_type_display=medal_type_display
                         )
                         success_count += 1
-                        print(f"  ✓ Winter: {winter_data_count} data points")
+                        print(f"  [OK] Winter: {winter_data_count} data points")
                     except Exception as e:
-                        print(f"  ✗ Winter failed: {e}")
+                        print(f"  [FAIL] Winter failed: {e}")
                 else:
                     print(f"  - Winter: No data available")
                     skip_count += 1

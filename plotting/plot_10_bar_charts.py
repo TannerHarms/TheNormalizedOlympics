@@ -473,44 +473,12 @@ def create_metric_bar_chart(df_full, metric):
             .replace(' ', '_').replace('(', '').replace(')', '')
             .replace('/', '_').replace('%', 'pct').replace('°', 'deg'))
     
-    # Map normalized column names to folder names (matching plot_09_all_metrics.py)
-    FOLDER_MAP = {
-        'Medals_Per_Million': 'capita',
-        'Medals_Per_HDI': 'hdi',
-        'Medals_Per_Billion_GDP': 'gdp',
-        'Medals_Per_GDP_Per_Capita': 'gdp_per_capita',
-        'Medals_Per_1000_SqKm': '1000_square_kilometers',
-        'Medals_Per_1000_Km_Coastline': '1000_km_coastline',
-        'Medals_Per_100m_Elevation': '100m_elevation',
-        'Medals_Per_Degree_Temp': 'degree_temperature',
-        'Medals_Per_100_Sunshine_Days': '100_sunshine_days',
-        'Medals_Per_100_Cm_Snowfall': '100_cm_snowfall',
-        'Medals_Per_Million_Internet_Users': 'million_internet_users',
-        'Medals_Per_1000_Vehicles': '1000_vehicles',
-        'Medals_Per_University': 'university',
-        'Medals_Per_Stadium': 'sports_stadium',
-        'Medals_Per_Ski_Resort': 'ski_resort',
-        'Medals_Per_Pct_Healthcare_Spending': 'pct_gdp_healthcare_spending',
-        'Medals_Per_Year_Life_Expectancy': 'year_life_expectancy',
-        'Medals_Per_100_Work_Hours': '100_work_hours_per_year',
-        'Medals_Per_Million_Kg_Coffee': 'million_kg_coffee',
-        'Medals_Per_Million_Cola_Servings': 'million_cola_servings',
-        'Medals_Per_Peace_Index_Point': 'peace_index_point',
-        'Medals_Per_1000_Refugees_Received': '1000_refugees_received',
-        'Medals_Per_1000_Refugees_Produced': '1000_refugees_produced',
-        'Medals_Per_Pct_Military_Spending': 'pct_gdp_military_spending',
-        'Medals_Per_1000_Military_Personnel': '1000_military_personnel',
-        'Medals_Per_Pct_Education_Spending': 'pct_gdp_education_spending',
-    }
-    
-    norm_col = metric['norm_col']
-    folder_name = FOLDER_MAP.get(norm_col, 'other')
-    
-    metric_dir = PLOTS_DIR / folder_name
-    metric_dir.mkdir(exist_ok=True)
+    # Save to dedicated context folder
+    context_dir = PLOTS_DIR / 'context'
+    context_dir.mkdir(exist_ok=True)
     
     filename = f'context_bar_{slug}.png'
-    save_plot(fig, metric_dir / filename)
+    save_plot(fig, context_dir / filename)
     plt.close(fig)
     return n_total, best_year
 

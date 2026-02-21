@@ -5,11 +5,16 @@ This script extracts Total_Athletes, Individual_Medalists, and Total_Medals_Awar
 from the olympic_results.csv file for PyeongChang 2018 and Beijing 2022, then
 updates the winter_olympics_all_metrics.csv file.
 
+NOTE: Since olympic_results.csv doesn't have full team rosters for 2018/2022,
+Total_Medals_Awarded is estimated using country-specific historical multipliers
+from 2014 (most recent year with complete athlete-level data).
+
 Author: Tanner D. Harms, February 2026
 """
 
 import pandas as pd
 from pathlib import Path
+import numpy as np
 
 # Paths
 DATA_DIR = Path(__file__).parent.parent / 'data'
@@ -17,11 +22,39 @@ RAW_DIR = DATA_DIR / 'raw'
 RESULTS_FILE = RAW_DIR / 'olympic_results.csv'
 WINTER_METRICS_FILE = DATA_DIR / 'winter_olympics_all_metrics.csv'
 
+def calculate_historical_multipliers(df_winter):
+    """
+    Calculate country-specific multipliers (Total_Medals_Awarded / Total)
+    from 2014 Winter Olympics to use for estimating 2018/2022 values.
+    
+    Returns: dict of country_code -> multiplier
+    """
+    # Use 2014 as reference (most recent with complete data)
+    df_2014 = df_winter[df_winter['Year'] == 2014].copy()
+    
+    multipliers = {}
+    for _, row in df_2014.iterrows():
+        if row['Total'] > 0:
+            multiplier = row['Total_Medals_Awarded'] / row['Total']
+            multipliers[row['Country']] = multiplier
+    
+    # Calculate overall average as fallback
+    overall_mult = df_2014['Total_Medals_Awarded'].sum() / df_2014['Total'].sum()
+    
+    print(f"\nCalculated historical multipliers from 2014:")
+    print(f"  Countries with data: {len(multipliers)}")
+    print(f"  Overall average multiplier: {overall_mult:.3f}")
+    print(f"  Sample multipliers:")
+    for i, (code, mult) in enumerate(list(sorted(multipliers.items(), key=lambda x: x[1], reverse=True))[:5]):
+        print(f"    {code}: {mult:.2f}")
+    
+    return multipliers, overall_mult
+
 def extract_athlete_counts(df_results, game_slug, year):
     """
-    Extract athlete counts from olympic_results.csv for a specific game.
+    Extract athlete counts AND medal counts from olympic_results.csv for a specific game.
     
-    Returns dict with Total_Athletes, Individual_Medalists, Total_Medals_Awarded by country
+    Returns dict with Total_Athletes, Individual_Medalists, Total_Medals_Awarded, Gold, Silver, Bronze, Total by country
     """
     # Filter to the specific game
     game_data = df_results[df_results['slug_game'] == game_slug].copy()
@@ -77,16 +110,26 @@ def extract_athlete_counts(df_results, game_slug, year):
         # Each medal result row represents a medal awarded
         total_medals_awarded = len(medal_data)
         
+        # Count official medal counts (by event, not by athlete)
+        gold_medals = len(medal_data[medal_data['medal_type'] == 'GOLD'])
+        silver_medals = len(medal_data[medal_data['medal_type'] == 'SILVER'])
+        bronze_medals = len(medal_data[medal_data['medal_type'] == 'BRONZE'])
+        total_medals = gold_medals + silver_medals + bronze_medals
+        
         country_results[country_code_3] = {
             'Total_Athletes': total_athletes,
             'Individual_Medalists': individual_medalists,
-            'Total_Medals_Awarded': total_medals_awarded
+            'Total_Medals_Awarded': total_medals_awarded,
+            'Gold': gold_medals,
+            'Silver': silver_medals,
+            'Bronze': bronze_medals,
+            'Total': total_medals
         }
     
     print(f"  Countries processed: {len(country_results)}")
     print(f"  Sample (first 3 countries):")
     for i, (code, stats) in enumerate(list(country_results.items())[:3]):
-        print(f"    {code}: {stats['Total_Athletes']} athletes, {stats['Individual_Medalists']} medalists, {stats['Total_Medals_Awarded']} medals awarded")
+        print(f"    {code}: {stats['Total_Athletes']} athletes, {stats['Individual_Medalists']} medalists, {stats['Total']} total medals (G:{stats['Gold']}, S:{stats['Silver']}, B:{stats['Bronze']})")
     
     return country_results
 
@@ -97,6 +140,15 @@ def main():
     print("Adding Winter Olympics 2018 and 2022 Athlete Data")
     print("="*70)
     
+    # Load existing winter metrics first (needed for calculating multipliers)
+    print(f"\nLoading {WINTER_METRICS_FILE}...")
+    df_winter = pd.read_csv(WINTER_METRICS_FILE)
+    print(f"Current shape: {df_winter.shape}")
+    print(f"Current years: {sorted(df_winter['Year'].unique())}")
+    
+    # Calculate historical multipliers for estimating Total_Medals_Awarded
+    multipliers, overall_mult = calculate_historical_multipliers(df_winter)
+    
     # Load olympic results
     print(f"\nLoading {RESULTS_FILE}...")
     df_results = pd.read_csv(RESULTS_FILE, low_memory=False)
@@ -106,22 +158,30 @@ def main():
     winter_2018 = extract_athlete_counts(df_results, 'pyeongchang-2018', 2018)
     winter_2022 = extract_athlete_counts(df_results, 'beijing-2022', 2022)
     
-    # Load existing winter metrics
-    print(f"\nLoading {WINTER_METRICS_FILE}...")
-    df_winter = pd.read_csv(WINTER_METRICS_FILE)
-    print(f"Current shape: {df_winter.shape}")
-    print(f"Current years: {sorted(df_winter['Year'].unique())}")
+    # Estimate Total_Medals_Awarded using historical multipliers
+    print(f"\nEstimating Total_Medals_Awarded using country-specific multipliers from 2014:")
+    print("(olympic_results.csv lacks team roster data for 2018/2022)")
+    for country_code, stats in winter_2018.items():
+        mult = multipliers.get(country_code, overall_mult)
+        original = stats['Total_Medals_Awarded']
+        estimated = int(round(stats['Total'] * mult))
+        stats['Total_Medals_Awarded'] = estimated
+        print(f"  2018 {country_code}: Total={stats['Total']}, Estimated={estimated} (mult×{mult:.2f}, was {original})")
+    
+    for country_code, stats in winter_2022.items():
+        mult = multipliers.get(country_code, overall_mult)
+        original = stats['Total_Medals_Awarded']
+        estimated = int(round(stats['Total'] * mult))
+        stats['Total_Medals_Awarded'] = estimated
+        print(f"  2022 {country_code}: Total={stats['Total']}, Estimated={estimated} (mult×{mult:.2f}, was {original})")
     
     # Check if 2018/2022 already exist
     has_2018 = 2018 in df_winter['Year'].values
     has_2022 = 2022 in df_winter['Year'].values
     
     if has_2018 or has_2022:
-        print(f"\nWarning: Data already exists for years: {[y for y in [2018, 2022] if y in df_winter['Year'].values]}")
-        response = input("Do you want to update existing rows? (yes/no): ")
-        if response.lower() != 'yes':
-            print("Aborting.")
-            return
+        print(f"\nInfo: Data already exists for years: {[y for y in [2018, 2022] if y in df_winter['Year'].values]}")
+        print("Removing existing 2018/2022 data to update with corrected Total_Medals_Awarded...")
             
         # Remove existing 2018/2022 data
         df_winter = df_winter[~df_winter['Year'].isin([2018, 2022])]
@@ -143,9 +203,10 @@ def main():
         template_row['Total_Athletes'] = stats['Total_Athletes']
         template_row['Individual_Medalists'] = stats['Individual_Medalists']
         template_row['Total_Medals_Awarded'] = stats['Total_Medals_Awarded']
-        
-        # Note: Other medal counts (Gold, Silver, Bronze, Total) should already be in the dataset
-        # If not, we'd need to calculate them separately
+        template_row['Gold'] = stats['Gold']
+        template_row['Silver'] = stats['Silver']
+        template_row['Bronze'] = stats['Bronze']
+        template_row['Total'] = stats['Total']
         
         df_winter = pd.concat([df_winter, template_row.to_frame().T], ignore_index=True)
     
@@ -163,11 +224,85 @@ def main():
         template_row['Total_Athletes'] = stats['Total_Athletes']
         template_row['Individual_Medalists'] = stats['Individual_Medalists']
         template_row['Total_Medals_Awarded'] = stats['Total_Medals_Awarded']
+        template_row['Gold'] = stats['Gold']
+        template_row['Silver'] = stats['Silver']
+        template_row['Bronze'] = stats['Bronze']
+        template_row['Total'] = stats['Total']
         
         df_winter = pd.concat([df_winter, template_row.to_frame().T], ignore_index=True)
     
-    # Sort by Country and Year
+    # Sort by Country and Year BEFORE recalculating
     df_winter = df_winter.sort_values(['Country', 'Year']).reset_index(drop=True)
+    
+    # Recalculate all normalized metrics for 2018 and 2022 rows
+    print(f"\nRecalculating normalized metrics for 2018/2022...")
+    
+    # Get boolean mask for 2018/2022 rows
+    mask_2018_2022 = df_winter['Year'].isin([2018, 2022])
+    rows_to_recalc = df_winter[mask_2018_2022]
+    
+    print(f"  Found {len(rows_to_recalc)} rows to recalculate")
+    
+    # Recalculate for each row
+    for idx in rows_to_recalc.index:
+        total = df_winter.at[idx, 'Total']
+        population = df_winter.at[idx, 'Population']
+        
+        # Helper function to handle division by zero
+        def safe_divide(numerator, denominator, multiplier=1):
+            if pd.isna(denominator) or denominator == 0:
+                return float('inf') if numerator > 0 else 0
+            return (numerator / denominator) * multiplier
+        
+        # Basic metrics
+        df_winter.at[idx, 'Medals_Per_Million'] = safe_divide(total, population, 1_000_000)
+        df_winter.at[idx, 'Medals_Per_Billion_GDP'] = safe_divide(total, df_winter.at[idx, 'GDP'], 1_000_000_000)
+        df_winter.at[idx, 'Medals_Per_GDP_Per_Capita'] = safe_divide(total, df_winter.at[idx, 'GDP_per_capita'], 10_000)
+        df_winter.at[idx, 'Medals_Per_HDI'] = safe_divide(total, df_winter.at[idx, 'HDI'])
+        
+        # Geographic metrics
+        df_winter.at[idx, 'Medals_Per_1000_SqKm'] = safe_divide(total, df_winter.at[idx, 'Land_Area_SqKm'], 1000)
+        df_winter.at[idx, 'Medals_Per_1000_Km_Coastline'] = safe_divide(total, df_winter.at[idx, 'Coastline_Length_Km'], 1000)
+        df_winter.at[idx, 'Medals_Per_100m_Elevation'] = safe_divide(total, df_winter.at[idx, 'Average_Elevation_Meters'], 100)
+        
+        # Climate metrics
+        df_winter.at[idx, 'Medals_Per_Degree_Temp'] = safe_divide(total, abs(df_winter.at[idx, 'Avg_Temperature_C']))
+        df_winter.at[idx, 'Medals_Per_100_Sunshine_Days'] = safe_divide(total, df_winter.at[idx, 'Sunshine_Days_Per_Year'], 100)
+        df_winter.at[idx, 'Medals_Per_100_Cm_Snowfall'] = safe_divide(total, df_winter.at[idx, 'Avg_Snowfall_Cm_Per_Year'], 100)
+        
+        # Infrastructure metrics
+        internet_users = df_winter.at[idx, 'Internet_Users_Pct'] * population / 100
+        df_winter.at[idx, 'Medals_Per_Million_Internet_Users'] = safe_divide(total, internet_users, 1_000_000)
+        vehicles = df_winter.at[idx, 'Vehicles_Per_1000'] * population / 1000
+        df_winter.at[idx, 'Medals_Per_1000_Vehicles'] = safe_divide(total, vehicles, 1000)
+        df_winter.at[idx, 'Medals_Per_University'] = safe_divide(total, df_winter.at[idx, 'Number_of_Universities'])
+        df_winter.at[idx, 'Medals_Per_Stadium'] = safe_divide(total, df_winter.at[idx, 'Professional_Sports_Stadiums'])
+        df_winter.at[idx, 'Medals_Per_Ski_Resort'] = safe_divide(total, df_winter.at[idx, 'Number_of_Ski_Resorts'])
+        
+        # Economic/Social metrics
+        df_winter.at[idx, 'Medals_Per_Pct_Healthcare_Spending'] = safe_divide(total, df_winter.at[idx, 'Healthcare_Spending_Pct_GDP'])
+        df_winter.at[idx, 'Medals_Per_Year_Life_Expectancy'] = safe_divide(total, df_winter.at[idx, 'Life_Expectancy_Years'])
+        df_winter.at[idx, 'Medals_Per_100_Work_Hours'] = safe_divide(total, df_winter.at[idx, 'Avg_Work_Hours_Per_Year'], 100)
+        
+        # Cultural metrics
+        coffee_consumption = df_winter.at[idx, 'Coffee_Consumption_Kg_Per_Capita'] * population
+        df_winter.at[idx, 'Medals_Per_Million_Kg_Coffee'] = safe_divide(total, coffee_consumption, 1_000_000)
+        cola_consumption = df_winter.at[idx, 'Coca_Cola_Servings_Per_Capita'] * population
+        df_winter.at[idx, 'Medals_Per_Million_Cola_Servings'] = safe_divide(total, cola_consumption, 1_000_000)
+        df_winter.at[idx, 'Medals_Per_Peace_Index_Point'] = safe_divide(total, df_winter.at[idx, 'Global_Peace_Index_Score'])
+        
+        # Refugee metrics
+        df_winter.at[idx, 'Medals_Per_1000_Refugees_Received'] = safe_divide(total, df_winter.at[idx, 'Refugees_Received'], 1000)
+        df_winter.at[idx, 'Medals_Per_1000_Refugees_Produced'] = safe_divide(total, df_winter.at[idx, 'Refugees_Produced'], 1000)
+        
+        # Military metrics
+        df_winter.at[idx, 'Medals_Per_Pct_Military_Spending'] = safe_divide(total, df_winter.at[idx, 'Military_Expenditure_Pct_GDP'])
+        df_winter.at[idx, 'Medals_Per_1000_Military_Personnel'] = safe_divide(total, df_winter.at[idx, 'Active_Military_Personnel_Thousands'], 1000)
+        
+        # Education metrics
+        df_winter.at[idx, 'Medals_Per_Pct_Education_Spending'] = safe_divide(total, df_winter.at[idx, 'Education_Spending_pct_GDP'])
+    
+    print(f"  ✓ Recalculated {len(rows_to_recalc)} rows with corrected normalized metrics")
     
     print(f"\nFinal shape: {df_winter.shape}")
     print(f"Final years: {sorted(df_winter['Year'].unique())}")

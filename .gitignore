@@ -29,9 +29,18 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
-
+# API Keys and Credentials
+kaggle.json
+*.json.secret
+*.key
+.env
+.env.*
 # Data (if large)
 # data/*.csv
 
 # Plots can be regenerated
 plots/*.png
+
+# Build output logs
+dashboard_output.txt
+plot_regeneration_output.txt

@@ -28,6 +28,81 @@ RECENT_OLYMPICS = {
     }
 }
 
+# Country name → NOC code mapping for Wikipedia medal tables
+COUNTRY_NAME_TO_NOC = {
+    'United States': 'USA', 'China': 'CHN', 'Great Britain': 'GBR',
+    'Japan': 'JPN', 'France': 'FRA', 'Italy': 'ITA', 'Australia': 'AUS',
+    'Canada': 'CAN', 'South Korea': 'KOR', 'Netherlands': 'NED',
+    'Spain': 'ESP', 'Brazil': 'BRA', 'Russia': 'RUS', 'ROC': 'ROC',
+    'Germany': 'GER', 'New Zealand': 'NZL', 'Switzerland': 'SUI',
+    'Sweden': 'SWE', 'Norway': 'NOR', 'Denmark': 'DEN', 'Finland': 'FIN',
+    'Belgium': 'BEL', 'Poland': 'POL', 'Ukraine': 'UKR',
+    'Czech Republic': 'CZE', 'Czechia': 'CZE', 'Austria': 'AUT',
+    'Hungary': 'HUN', 'Mexico': 'MEX', 'Argentina': 'ARG',
+    'South Africa': 'RSA', 'India': 'IND', 'Portugal': 'POR',
+    'Greece': 'GRE', 'Turkey': 'TUR', 'Ireland': 'IRL',
+    'Türkiye': 'TUR', 'Egypt': 'EGY', 'Jamaica': 'JAM',
+    'Kenya': 'KEN', 'Ethiopia': 'ETH', 'Cuba': 'CUB',
+    'Nigeria': 'NGR', 'Algeria': 'ALG', 'Morocco': 'MAR',
+    'Tunisia': 'TUN', 'Colombia': 'COL', 'Chile': 'CHI',
+    'Venezuela': 'VEN', 'Peru': 'PER', 'Ecuador': 'ECU',
+    'Uruguay': 'URU', 'Pakistan': 'PAK', 'Thailand': 'THA',
+    'Malaysia': 'MAS', 'Singapore': 'SGP', 'Indonesia': 'INA',
+    'Philippines': 'PHI', 'Vietnam': 'VIE', 'Israel': 'ISR',
+    'Iraq': 'IRQ', 'Iran': 'IRI', 'Saudi Arabia': 'KSA',
+    'United Arab Emirates': 'UAE', 'Kuwait': 'KUW', 'Qatar': 'QAT',
+    'Bahamas': 'BAH', 'Bahrain': 'BRN', 'Jordan': 'JOR',
+    'Chinese Taipei': 'TPE', 'Hong Kong': 'HKG', 'Lebanon': 'LEB',
+    'Syria': 'SYR', 'North Korea': 'PRK', 'Mongolia': 'MGL',
+    'Kazakhstan': 'KAZ', 'Uzbekistan': 'UZB', 'Turkmenistan': 'TKM',
+    'Kyrgyzstan': 'KGZ', 'Tajikistan': 'TJK', 'Afghanistan': 'AFG',
+    'Bangladesh': 'BAN', 'Sri Lanka': 'SRI', 'Nepal': 'NEP',
+    'Myanmar': 'MYA', 'Cambodia': 'CAM', 'Brunei': 'BRU',
+    'Timor-Leste': 'TLS', 'Slovenia': 'SLO', 'Croatia': 'CRO',
+    'Serbia': 'SRB', 'Bosnia and Herzegovina': 'BIH',
+    'North Macedonia': 'MKD', 'Montenegro': 'MNE', 'Albania': 'ALB',
+    'Kosovo': 'KOS', 'Bulgaria': 'BUL', 'Romania': 'ROU',
+    'Moldova': 'MDA', 'Georgia': 'GEO', 'Armenia': 'ARM',
+    'Azerbaijan': 'AZE', 'Belarus': 'BLR', 'Lithuania': 'LTU',
+    'Latvia': 'LAT', 'Estonia': 'EST', 'Slovakia': 'SVK',
+    'Iceland': 'ISL', 'Luxembourg': 'LUX', 'Malta': 'MLT',
+    'Cyprus': 'CYP', 'Andorra': 'AND', 'Monaco': 'MON',
+    'Liechtenstein': 'LIE', 'San Marino': 'SMR',
+    'Trinidad and Tobago': 'TRI', 'Barbados': 'BAR',
+    'Dominican Republic': 'DOM', 'Haiti': 'HAI', 'Puerto Rico': 'PUR',
+    'Ghana': 'GHA', 'Zimbabwe': 'ZIM', 'Uganda': 'UGA',
+    'Botswana': 'BOT', 'Namibia': 'NAM', 'Tanzania': 'TAN',
+    'Zambia': 'ZAM', 'Senegal': 'SEN', 'Ivory Coast': 'CIV',
+    "Côte d'Ivoire": 'CIV', 'Cameroon': 'CMR',
+    'Burkina Faso': 'BUR', 'Mali': 'MLI', 'Niger': 'NIG',
+    'Togo': 'TOG', 'Benin': 'BEN', 'Gabon': 'GAB',
+    'Republic of the Congo': 'CGO', 'Congo': 'COD',
+    'Angola': 'ANG', 'Mozambique': 'MOZ', 'Madagascar': 'MAD',
+    'Mauritius': 'MRI', 'Seychelles': 'SEY',
+    'Fiji': 'FIJ', 'Samoa': 'SAM', 'Tonga': 'TGA',
+    'Papua New Guinea': 'PNG', 'Jamaica': 'JAM',
+    'Bolivia': 'BOL', 'Paraguay': 'PAR', 'Guyana': 'GUY',
+    'Suriname': 'SUR', 'Guatemala': 'GUA', 'Honduras': 'HON',
+    'Nicaragua': 'NCA', 'Costa Rica': 'CRC', 'Panama': 'PAN',
+    'El Salvador': 'ESA', 'Belize': 'BIZ',
+    'Grenada': 'GRN', 'Dominica': 'DMA', 'Saint Lucia': 'LCA',
+    'Bermuda': 'BER', 'Burundi': 'BDI',
+    'Central African Republic': 'CAF', 'Chad': 'CHA',
+    'Comoros': 'COM', 'Cape Verde': 'CPV', 'Cabo Verde': 'CPV',
+    'Gambia': 'GAM', 'Guinea-Bissau': 'GBS',
+    'Equatorial Guinea': 'GEQ', 'Guinea': 'GUI',
+    'Lesotho': 'LES', 'Malawi': 'MAW', 'Mauritania': 'MTN',
+    'Rwanda': 'RWA', 'Sierra Leone': 'SLE',
+    'Eswatini': 'SWZ', 'Swaziland': 'SWZ',
+    'Liberia': 'LBR', 'Libya': 'LBA', 'Sudan': 'SUD',
+    'South Sudan': 'SSD', 'Eritrea': 'ERI', 'Djibouti': 'DJI',
+    'Somalia': 'SOM', 'Yemen': 'YEM', 'Oman': 'OMA',
+    'Maldives': 'MDV', 'Palestine': 'PLE',
+    'Olympic Athletes from Russia': 'OAR',
+    'Individual Neutral Athletes': 'AIN',
+    'Refugee Olympic Team': 'EOR',
+}
+
 def fetch_medal_table(year, wiki_page):
     """Fetch medal table from Wikipedia for a specific Olympics"""
     url = f"https://en.wikipedia.org/wiki/{wiki_page}"
@@ -100,8 +175,18 @@ def fetch_medal_table(year, wiki_page):
                     result = result[result['Country'].str.len() > 0]
                     result = result[~result['Country'].str.lower().str.contains('total|rank', na=False)]
                     
+                    # Convert country names to NOC codes
+                    result['Country'] = result['Country'].map(
+                        lambda name: COUNTRY_NAME_TO_NOC.get(name, name)
+                    )
+                    
                     # Reorder columns to match existing format
                     result = result[['Year', 'Country', 'Gold', 'Silver', 'Bronze', 'Total']]
+                    
+                    # Report any unmapped names (still full names, not NOC codes)
+                    unmapped = result[result['Country'].str.len() > 3]['Country'].tolist()
+                    if unmapped:
+                        print(f"⚠ Unmapped names: {unmapped}", end=" ")
                     
                     print(f"✓ ({len(result)} countries)")
                     return result
@@ -115,7 +200,14 @@ def fetch_medal_table(year, wiki_page):
 
 
 def add_recent_data(season):
-    """Add recent Olympics data for a season (summer or winter)"""
+    """Add or update recent Olympics data for a season (summer or winter).
+    
+    For years that already exist in the by_year CSV:
+      - Updates medal counts from Wikipedia (authoritative source)
+      - Preserves zero-medal participating countries from extended athlete data
+    For years that don't exist yet:
+      - Adds the full Wikipedia medal table
+    """
     
     # Determine file paths
     filename = f"{season}_olympics_by_year.csv"
@@ -127,40 +219,77 @@ def add_recent_data(season):
     
     # Load existing data
     existing_df = pd.read_csv(filepath)
-    max_existing_year = int(existing_df['Year'].max())
+    existing_years = set(existing_df['Year'].unique())
     
     print(f"\n{season.upper()} OLYMPICS")
     print("-" * 70)
-    print(f"Current data: {int(existing_df['Year'].min())}-{max_existing_year}")
-    print(f"Adding recent games...")
+    print(f"Current data: {int(existing_df['Year'].min())}-{int(existing_df['Year'].max())}")
+    print(f"Updating/adding recent games from Wikipedia medal tables...")
     
-    # Collect recent Olympics data
-    recent_data = []
-    olympics_to_add = RECENT_OLYMPICS[season]
+    # Collect recent Olympics data from Wikipedia
+    olympics_to_process = RECENT_OLYMPICS[season]
+    updated = False
     
-    for year in sorted(olympics_to_add.keys()):
-        if year > max_existing_year:
-            wiki_page = olympics_to_add[year]
-            df = fetch_medal_table(year, wiki_page)
-            if df is not None:
-                recent_data.append(df)
-            time.sleep(0.5)  # Be nice to Wikipedia
+    for year in sorted(olympics_to_process.keys()):
+        wiki_page = olympics_to_process[year]
+        wiki_df = fetch_medal_table(year, wiki_page)
+        if wiki_df is None:
+            continue
+        time.sleep(0.5)  # Be nice to Wikipedia
+        
+        if year in existing_years:
+            # Year exists — update medal counts from Wikipedia while keeping all participants
+            year_mask = existing_df['Year'] == year
+            existing_year = existing_df[year_mask].copy()
+            
+            # Set all medal counts to 0 for this year (will be filled from Wikipedia)
+            existing_year[['Gold', 'Silver', 'Bronze', 'Total']] = 0
+            
+            # Update with Wikipedia medal counts
+            for _, wiki_row in wiki_df.iterrows():
+                country = wiki_row['Country']
+                country_mask = existing_year['Country'] == country
+                if country_mask.any():
+                    existing_year.loc[country_mask, 'Gold'] = int(wiki_row['Gold'])
+                    existing_year.loc[country_mask, 'Silver'] = int(wiki_row['Silver'])
+                    existing_year.loc[country_mask, 'Bronze'] = int(wiki_row['Bronze'])
+                    existing_year.loc[country_mask, 'Total'] = int(wiki_row['Total'])
+                else:
+                    # Country won medals but wasn't in participant list — add them
+                    new_row = pd.DataFrame([{
+                        'Year': year,
+                        'Country': country,
+                        'Gold': int(wiki_row['Gold']),
+                        'Silver': int(wiki_row['Silver']),
+                        'Bronze': int(wiki_row['Bronze']),
+                        'Total': int(wiki_row['Total']),
+                    }])
+                    existing_year = pd.concat([existing_year, new_row], ignore_index=True)
+            
+            # Replace this year's data in the main dataframe
+            existing_df = pd.concat([existing_df[~year_mask], existing_year], ignore_index=True)
+            
+            medal_winners = existing_year[existing_year['Total'] > 0].shape[0]
+            participants = len(existing_year)
+            print(f"    Updated {year}: {medal_winners} medal winners, {participants} total participants")
+            updated = True
+        else:
+            # New year — add Wikipedia data directly
+            existing_df = pd.concat([existing_df, wiki_df], ignore_index=True)
+            print(f"    Added {year}: {len(wiki_df)} countries")
+            updated = True
     
-    if not recent_data:
-        print("No new data to add")
+    if not updated:
+        print("No updates needed")
         return False
     
-    # Combine with existing data
-    combined_df = pd.concat([existing_df] + recent_data, ignore_index=True)
-    combined_df = combined_df.sort_values(['Year', 'Total'], ascending=[True, False])
-    
-    # Save updated data
-    combined_df.to_csv(filepath, index=False)
+    # Sort and save
+    existing_df = existing_df.sort_values(['Year', 'Total'], ascending=[True, False])
+    existing_df.to_csv(filepath, index=False)
     
     print(f"\n✓ Updated {filename}")
-    print(f"  Years now: {int(combined_df['Year'].min())}-{int(combined_df['Year'].max())}")
-    print(f"  Total records: {len(combined_df)}")
-    print(f"  Added: {len(combined_df) - len(existing_df)} new records")
+    print(f"  Years now: {int(existing_df['Year'].min())}-{int(existing_df['Year'].max())}")
+    print(f"  Total records: {len(existing_df)}")
     
     return True
 

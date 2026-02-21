@@ -79,7 +79,8 @@ NOC_TO_WB = {
     'JOR': 'JOR',
     'TPE': 'TWN',  # Chinese Taipei
     'HKG': 'HKG',  # Hong Kong
-    'LEB': 'LBN',  # Lebanon
+    'LEB': 'LBN',  # Lebanon (official IOC code)
+    'LIB': 'LBN',  # Lebanon (historical Olympic code)
     'SYR': 'SYR',
     
     # Historical/Special cases
@@ -92,13 +93,31 @@ NOC_TO_WB = {
     'GDR': 'DEU',  # East Germany (merged into Germany)
     'FRG': 'DEU',  # West Germany (merged into Germany)
     'EUA': 'DEU',  # United Team of Germany (1956-1964)
+    'MAL': 'MYS',  # Malaya (became Malaysia)
+    'AHO': None,   # Netherlands Antilles (dissolved 2010)
+    'IOA': None,   # Individual Olympic Athletes
+    'ROT': None,   # Refugee Olympic Athletes
+    'SCG': None,   # Serbia and Montenegro (dissolved 2006)
+    'RHO': None,   # Rhodesia (now Zimbabwe)
     
     # Caribbean
-    'TRI': 'TTO',  # Trinidad and Tobago
+    'TRI': 'TTO',  # Trinidad and Tobago (old NOC code)
+    'TTO': 'TTO',  # Trinidad and Tobago (ISO3 / current data)
     'BAR': 'BRB',  # Barbados
     'DOM': 'DOM',
     'HAI': 'HTI',  # Haiti
     'PUR': 'PRI',  # Puerto Rico
+    'ANT': None,   # Netherlands Antilles (dissolved 2010)
+    'ARU': 'ABW',  # Aruba
+    'CAY': 'CYM',  # Cayman Islands
+    'ISV': 'VIR',  # US Virgin Islands
+    'IVB': 'VGB',  # British Virgin Islands
+    'SKN': 'KNA',  # Saint Kitts and Nevis
+    'LCA': 'LCA',  # Saint Lucia
+    'VIN': 'VCT',  # Saint Vincent and the Grenadines
+    'GRN': 'GRD',  # Grenada
+    'DMA': 'DMA',  # Dominica
+    'BER': 'BMU',  # Bermuda
     
     # Africa
     'GHA': 'GHA',
@@ -124,6 +143,23 @@ NOC_TO_WB = {
     'MAD': 'MDG',  # Madagascar
     'MRI': 'MUS',  # Mauritius
     'SEY': 'SYC',  # Seychelles
+    'BDI': 'BDI',  # Burundi
+    'CAF': 'CAF',  # Central African Republic
+    'CHA': 'TCD',  # Chad
+    'COM': 'COM',  # Comoros
+    'CPV': 'CPV',  # Cape Verde / Cabo Verde
+    'GAM': 'GMB',  # Gambia
+    'GBS': 'GNB',  # Guinea-Bissau
+    'GEQ': 'GNQ',  # Equatorial Guinea
+    'GUI': 'GIN',  # Guinea
+    'LBR': 'LBR',  # Liberia
+    'LES': 'LSO',  # Lesotho
+    'MAW': 'MWI',  # Malawi
+    'MTN': 'MRT',  # Mauritania
+    'RWA': 'RWA',  # Rwanda
+    'SLE': 'SLE',  # Sierra Leone
+    'STP': 'STP',  # São Tomé and Príncipe
+    'SWZ': 'SWZ',  # Eswatini (Swaziland)
     
     # Asia
     'PRK': 'PRK',  # North Korea
@@ -143,6 +179,11 @@ NOC_TO_WB = {
     'CAM': 'KHM',  # Cambodia
     'BRU': 'BRN',  # Brunei
     'TLS': 'TLS',  # Timor-Leste
+    'LBN': 'LBN',  # Lebanon (ISO3/current data)
+    'OMA': 'OMN',  # Oman
+    'MDV': 'MDV',  # Maldives
+    'YEM': 'YEM',  # Yemen
+    'PLE': 'PSE',  # Palestine
     
     # Central/South America
     'BOL': 'BOL',
@@ -167,7 +208,8 @@ NOC_TO_WB = {
     'ALB': 'ALB',
     'KOS': 'XKX',  # Kosovo (World Bank uses XKX)
     'BUL': 'BGR',  # Bulgaria
-    'ROM': 'ROU',  # Romania
+    'ROM': 'ROU',  # Romania (old NOC code)
+    'ROU': 'ROU',  # Romania (ISO3 / current data)
     'MDA': 'MDA',  # Moldova
     'GEO': 'GEO',
     'ARM': 'ARM',
@@ -190,7 +232,8 @@ NOC_TO_WB = {
     'PNG': 'PNG',  # Papua New Guinea
     'FIJ': 'FJI',  # Fiji
     'SAM': 'WSM',  # Samoa
-    'TON': 'TON',  # Tonga
+    'TON': 'TON',  # Tonga (legacy code, maps to WB Tonga)
+    'TGA': 'TON',  # Tonga (actual NOC code used in data)
     'SOL': 'SLB',  # Solomon Islands
     'VAN': 'VUT',  # Vanuatu
     'PLW': 'PLW',  # Palau
@@ -198,8 +241,11 @@ NOC_TO_WB = {
     'MHL': 'MHL',  # Marshall Islands
     'KIR': 'KIR',  # Kiribati
     'TUV': 'TUV',  # Tuvalu
-    'NAU': 'NRU',  # Nauru
+    'NAU': 'NRU',  # Nauru (legacy code)
+    'NRU': 'NRU',  # Nauru (actual NOC code used in data)
     'COK': 'COK',  # Cook Islands
+    'ASA': 'ASM',  # American Samoa
+    'GUM': 'GUM',  # Guam
     
     # Other
     'LBA': 'LBY',  # Libya
@@ -208,6 +254,10 @@ NOC_TO_WB = {
     'ERI': 'ERI',  # Eritrea
     'DJI': 'DJI',  # Djibouti
     'SOM': 'SOM',  # Somalia
+    
+    # Special non-country delegations
+    'AIN': None,   # Individual Neutral Athletes (2024)
+    'EOR': None,   # Refugee Olympic Team
 }
 
 # Reverse mapping (World Bank to NOC) - useful for some operations

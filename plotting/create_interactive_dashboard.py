@@ -24,7 +24,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 MIN_MEDALS = 5
 MIN_PARTICIPATIONS = 4
 
-# Mapping from normalization column Ã¢â€ â€™ raw data column for context plots
+# Mapping from normalization column --> raw data column for context plots
 # fmt is Python format spec, used only for reference; JS handles display formatting
 NORM_TO_CONTEXT = {
     'Medals_Per_Million': {
@@ -99,25 +99,9 @@ NORM_TO_CONTEXT = {
         'raw_col': 'Avg_Work_Hours_Per_Year', 'name': 'Average Work Hours Per Year',
         'source': 'OECD Statistics (2000-2023)', 'snapshot': True,
     },
-    'Medals_Per_Million_Kg_Coffee': {
-        'raw_col': 'Coffee_Consumption_Kg_Per_Capita', 'name': 'Coffee Consumption (kg/capita)',
-        'source': 'International Coffee Organization (2024)', 'snapshot': True,
-    },
-    'Medals_Per_Million_Cola_Servings': {
-        'raw_col': 'Coca_Cola_Servings_Per_Capita', 'name': 'Coca-Cola Servings Per Capita',
-        'source': 'Estimated from consumption data (2024)', 'snapshot': True,
-    },
     'Medals_Per_Peace_Index_Point': {
         'raw_col': 'Global_Peace_Index_Score', 'name': 'Global Peace Index Score',
         'source': 'Institute for Economics & Peace (2024)', 'snapshot': True,
-    },
-    'Medals_Per_1000_Refugees_Received': {
-        'raw_col': 'Refugees_Received', 'name': 'Refugees Received',
-        'source': 'UNHCR Refugee Statistics (2023)', 'snapshot': True,
-    },
-    'Medals_Per_1000_Refugees_Produced': {
-        'raw_col': 'Refugees_Produced', 'name': 'Refugees Produced',
-        'source': 'UNHCR Refugee Statistics (2023)', 'snapshot': True,
     },
     'Medals_Per_Pct_Military_Spending': {
         'raw_col': 'Military_Expenditure_Pct_GDP', 'name': 'Military Expenditure (% of GDP)',
@@ -164,9 +148,12 @@ def filter_and_prepare_data(df, medal_col, metric_col, start_year, end_year):
     # Remove invalid values
     df_filtered = df_filtered[
         df_filtered[plot_col].notna() & 
-        np.isfinite(df_filtered[plot_col]) &
-        (df_filtered[plot_col] != 0)
+        np.isfinite(df_filtered[plot_col])
     ]
+    # For most metrics, also remove zeros; but for Total_Athletes baseline,
+    # keep zero-medal nations so delegation sizes are properly represented
+    if not (medal_col == 'Total_Athletes' and metric_col == medal_col):
+        df_filtered = df_filtered[df_filtered[plot_col] != 0]
     
     # Apply quality filters for non-baseline normalized metrics
     if metric_col != medal_col and medal_col != 'Total_Athletes':
@@ -278,7 +265,7 @@ def compute_baseline_context_data(df, medal_col):
         
         if country not in country_year_data:
             country_year_data[country] = {}
-        # [gold, silver, bronze, nomedal, total] Ã¢â‚¬â€ compact for JSON
+        # [gold, silver, bronze, nomedal, total] -- compact for JSON
         country_year_data[country][year] = [
             round(g, 2), round(s, 2), round(b, 2), round(n, 2), round(medal_val, 2)
         ]
@@ -397,20 +384,20 @@ def compute_plot_data(df, medal_col, metric_col, start_year, end_year):
     final_trend_countries = country_counts[country_counts >= min_req].index
     df_trends = df_filtered[df_filtered['Country'].isin(final_trend_countries)]
     
-    # Get top and bottom trend countries by max metric value
+    # Get top and bottom trend countries by median metric value
     if len(df_trends) == 0:
-        max_metrics = pd.Series(dtype=float)
+        median_metrics = pd.Series(dtype=float)
     else:
-        max_metrics = df_trends.groupby('Country')[plot_col].max().sort_values(ascending=False)
+        median_metrics = df_trends.groupby('Country')[plot_col].median().sort_values(ascending=False)
     
-    top_trend_names = max_metrics.head(TOP_N_TRENDS).index.tolist()
-    bottom_trend_names = max_metrics.tail(TOP_N_TRENDS).index.tolist()
+    top_trend_names = median_metrics.head(TOP_N_TRENDS).index.tolist()
+    bottom_trend_names = median_metrics.tail(TOP_N_TRENDS).index.tolist()
     
     # Compute trends sorted by median (matching MPL legend order)
     # Reds colormap for top performers
     red_palette = ['#67000d', '#a50f15', '#cb181d', '#ef3b2c', '#fb6a4a', '#fc9272']
     blue_palette = ['#08306b', '#08519c', '#2171b5', '#4292c6', '#6baed6', '#9ecae1']
-    # Brighter variants for dark backgrounds (same hue families, lightâ†’dark gradient)
+    # Brighter variants for dark backgrounds (same hue families, light→dark gradient)
     # Index 0 = most extreme value = lightest/most visible on dark bg
     red_palette_dark = ['#ffb3b3', '#ff8080', '#ff4d4d', '#e02020', '#b31010', '#800a0a']
     blue_palette_dark = ['#b3d4ff', '#80b8ff', '#4d9cff', '#2080e0', '#1060b3', '#0a4080']
@@ -510,12 +497,7 @@ def precompute_all_data(summer_df, winter_df):
         ('Medals_Per_Year_Life_Expectancy', 'per Year Life Expectancy', ' per Year Life Expectancy'),
         ('Medals_Per_100_Work_Hours', 'per 100 Work Hours', ' per 100 Work Hours/Year'),
         # Cultural
-        ('Medals_Per_Million_Kg_Coffee', 'per Million Kg Coffee', ' per Million Kg Coffee'),
-        ('Medals_Per_Million_Cola_Servings', 'per Million Cola Servings', ' per Million Cola Servings'),
         ('Medals_Per_Peace_Index_Point', 'per Peace Index Point', ' per Peace Index Point'),
-        # Refugee
-        ('Medals_Per_1000_Refugees_Received', 'per 1000 Refugees Received', ' per 1000 Refugees Received'),
-        ('Medals_Per_1000_Refugees_Produced', 'per 1000 Refugees Produced', ' per 1000 Refugees Produced'),
         # Military
         ('Medals_Per_Pct_Military_Spending', 'per Pct Military Spending', ' per Pct GDP Military'),
         ('Medals_Per_1000_Military_Personnel', 'per 1000 Military Personnel', ' per 1000 Military Personnel'),
@@ -597,7 +579,7 @@ def precompute_all_data(summer_df, winter_df):
                     data['unit_suffix'] = norm_unit
                     data['available_years'] = [int(y) for y in years]
                     
-                    # Attach context key (not data Ã¢â‚¬â€ avoids JSON duplication)
+                    # Attach context key (not data -- avoids JSON duplication)
                     if norm_col is not None:
                         data['context_key'] = f"{season_name}|{norm_col}"
                     else:

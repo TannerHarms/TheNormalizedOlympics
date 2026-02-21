@@ -3,6 +3,7 @@ Merge all collected metrics into the summer/winter Olympics normalized datasets.
 """
 
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
 data_dir = Path(__file__).parent.parent / "data"
@@ -38,10 +39,6 @@ def merge_all_metrics():
     sports_df = pd.read_csv(data_dir / "sports_culture_data.csv")
     print(f"  - Sports & culture: {len(sports_df)} records")
     
-    # Consumption (2024 snapshot)
-    consumption_df = pd.read_csv(data_dir / "consumption_data.csv")
-    print(f"  - Consumption data: {len(consumption_df)} records")
-    
     # Work hours (time series from OECD SDMX API, 2005-2023)
     work_df = pd.read_csv(data_dir / "work_hours_data.csv")
     work_df['Year'] = work_df['Year'].astype(int)
@@ -50,10 +47,6 @@ def merge_all_metrics():
     # Global Peace Index (2024 snapshot)
     gpi_df = pd.read_csv(data_dir / "global_peace_index.csv")
     print(f"  - Global Peace Index: {len(gpi_df)} records")
-    
-    # Refugee data (2023 snapshot)
-    refugee_df = pd.read_csv(data_dir / "refugee_data.csv")
-    print(f"  - Refugee data: {len(refugee_df)} records")
     
     # Military data (time series from World Bank API, 2000-2023)
     military_df = pd.read_csv(data_dir / "military_data.csv")
@@ -78,14 +71,9 @@ def merge_all_metrics():
         df = df.merge(sports_df[['WB_Code', 'Number_of_Universities', 
                                    'Number_of_Ski_Resorts', 'Professional_Sports_Stadiums']], 
                       on='WB_Code', how='left')
-        df = df.merge(consumption_df[['WB_Code', 'Coffee_Consumption_Kg_Per_Capita', 
-                                       'Coca_Cola_Servings_Per_Capita']], 
-                      on='WB_Code', how='left')
         df = df.merge(work_df[['WB_Code', 'Year', 'Avg_Work_Hours_Per_Year']], 
                       on=['WB_Code', 'Year'], how='left')
         df = df.merge(gpi_df[['WB_Code', 'Global_Peace_Index_Score']], 
-                      on='WB_Code', how='left')
-        df = df.merge(refugee_df[['WB_Code', 'Refugees_Received', 'Refugees_Produced']], 
                       on='WB_Code', how='left')
         df = df.merge(military_df[['WB_Code', 'Year', 'Military_Expenditure_Pct_GDP', 'Active_Military_Personnel_Thousands']], 
                       on=['WB_Code', 'Year'], how='left')
@@ -95,6 +83,14 @@ def merge_all_metrics():
     summer_merged = merge_season(summer_df, "Summer")
     winter_merged = merge_season(winter_df, "Winter")
     
+    # Remove duplicates that may arise from outer joins
+    for df, name in [(summer_merged, 'Summer'), (winter_merged, 'Winter')]:
+        before = len(df)
+        df.drop_duplicates(subset=['Country', 'Year'], keep='last', inplace=True)
+        after = len(df)
+        if before != after:
+            print(f"  {name}: removed {before - after} duplicate Country-Year rows")
+    
     # Calculate new normalized metrics
     print("\nCalculating normalized metrics...")
     
@@ -103,10 +99,6 @@ def merge_all_metrics():
         df['Healthcare_Spending_USD'] = df['Healthcare_Spending_Per_Capita_USD'] * df['Population']
         df['Military_Expenditure_USD'] = df['GDP'] * (df['Military_Expenditure_Pct_GDP'] / 100)
         df['Education_Spending_USD'] = df['GDP'] * (df['Education_Spending_pct_GDP'] / 100)
-
-        # For unnormalized metrics, the 'normalized' value is just the total medals
-        df['Total_Medals_Summer'] = df['Total_Medals']
-        df['Total_Medals_Winter'] = df['Total_Medals']
 
         # Original basic metrics (matching column names from summer_olympics_normalized.csv)
         df['Medals_Per_Million'] = df['Total'] / df['Population'] * 1_000_000
@@ -156,18 +148,8 @@ def merge_all_metrics():
         # Work hours
         df['Medals_Per_100_Work_Hours'] = df['Total'] / df['Avg_Work_Hours_Per_Year'] * 100
         
-        # Coffee consumption
-        df['Medals_Per_Million_Kg_Coffee'] = df['Total'] / (df['Coffee_Consumption_Kg_Per_Capita'] * df['Population']) * 1_000_000
-        
-        # Cola consumption
-        df['Medals_Per_Million_Cola_Servings'] = df['Total'] / (df['Coca_Cola_Servings_Per_Capita'] * df['Population']) * 1_000_000
-        
         # Peace index
         df['Medals_Per_Peace_Index_Point'] = df['Total'] / df['Global_Peace_Index_Score']
-        
-        # Refugees
-        df['Medals_Per_1000_Refugees_Received'] = df['Total'] / df['Refugees_Received'] * 1000
-        df['Medals_Per_1000_Refugees_Produced'] = df['Total'] / df['Refugees_Produced'] * 1000
         
         # Military
         df['Medals_Per_Pct_Military_Spending'] = df['Total'] / df['Military_Expenditure_Pct_GDP']
@@ -176,7 +158,18 @@ def merge_all_metrics():
         # Education spending
         df['Medals_Per_Pct_Education_Spending'] = df['Total'] / df['Education_Spending_pct_GDP']
         
-        print(f"  {season}: Added 22 new normalized metrics")
+        print(f"  {season}: Added 18 new normalized metrics")
+    
+    # Clean inf values from all numeric columns
+    print("\nCleaning inf values...")
+    for df, name in [(summer_merged, 'Summer'), (winter_merged, 'Winter')]:
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        inf_count = np.isinf(df[numeric_cols]).sum().sum()
+        if inf_count > 0:
+            df[numeric_cols] = df[numeric_cols].replace([np.inf, -np.inf], np.nan)
+            print(f"  {name}: replaced {inf_count} inf values with NaN")
+        else:
+            print(f"  {name}: no inf values found")
     
     # Save merged datasets
     print("\nSaving merged datasets...")

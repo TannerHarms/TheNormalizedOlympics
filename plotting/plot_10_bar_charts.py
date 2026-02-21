@@ -18,6 +18,7 @@ import matplotlib.colors as mcolors
 import numpy as np
 from pathlib import Path
 import sys
+from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from plotting.plotting_style import apply_plot_style, save_plot
@@ -186,39 +187,11 @@ METRICS = [
         'source': 'OECD Statistics (2000-2023, OECD countries only)',
     },
     {
-        'norm_col': 'Medals_Per_Million_Kg_Coffee',
-        'raw_col': 'Coffee_Consumption_Kg_Per_Capita',
-        'name': 'Coffee Consumption (kg/capita)',
-        'fmt': '.1f',
-        'source': 'International Coffee Organization (2024)',
-    },
-    {
-        'norm_col': 'Medals_Per_Million_Cola_Servings',
-        'raw_col': 'Coca_Cola_Servings_Per_Capita',
-        'name': 'Coca-Cola Servings Per Capita',
-        'fmt': '.0f',
-        'source': 'Estimated from various consumption data (2024)',
-    },
-    {
         'norm_col': 'Medals_Per_Peace_Index_Point',
         'raw_col': 'Global_Peace_Index_Score',
         'name': 'Global Peace Index Score',
         'fmt': '.3f',
         'source': 'Institute for Economics & Peace (2024)',
-    },
-    {
-        'norm_col': 'Medals_Per_1000_Refugees_Received',
-        'raw_col': 'Refugees_Received',
-        'name': 'Refugees Received',
-        'fmt': ',.0f',
-        'source': 'UNHCR Refugee Statistics (2023)',
-    },
-    {
-        'norm_col': 'Medals_Per_1000_Refugees_Produced',
-        'raw_col': 'Refugees_Produced',
-        'name': 'Refugees Produced',
-        'fmt': ',.0f',
-        'source': 'UNHCR Refugee Statistics (2023)',
     },
     {
         'norm_col': 'Medals_Per_Pct_Military_Spending',
@@ -466,7 +439,7 @@ def create_metric_bar_chart(df_full, metric):
              ha='left', fontsize=11, style='italic', color='gray')
     
     fig.text(left_edge, 0.01,
-             'Prepared by Tanner D. Harms, February 2026',
+             f'Prepared by Tanner D. Harms, {datetime.now().strftime("%B %Y")}',
              ha='left', fontsize=10, style='italic', color='gray')
 
     slug = (name.lower()

@@ -66,11 +66,8 @@ def create_unified_csv():
     unified = unified.merge(sports[sports_cols], on='WB_Code', how='left')
     print(f"+ Sports & culture: {sports['WB_Code'].nunique()} countries")
     
-    # Consumption (2024 snapshot)
-    consumption = pd.read_csv(data_dir / "consumption_data.csv")
-    consumption_cols = ['WB_Code', 'Coffee_Consumption_Kg_Per_Capita', 'Coca_Cola_Servings_Per_Capita']
-    unified = unified.merge(consumption[consumption_cols], on='WB_Code', how='left')
-    print(f"+ Consumption: {consumption['WB_Code'].nunique()} countries")
+    # Consumption data columns are manually estimated and not reliable enough
+    # for normalization — skip coffee/cola consumption merge
     
     # Work hours (time series from OECD SDMX API, 2005-2023)
     work = pd.read_csv(data_dir / "work_hours_data.csv")
@@ -85,11 +82,7 @@ def create_unified_csv():
     unified = unified.merge(gpi[gpi_cols], on='WB_Code', how='left')
     print(f"+ Peace Index: {gpi['WB_Code'].nunique()} countries")
     
-    # Refugee data (2023 snapshot)
-    refugee = pd.read_csv(data_dir / "refugee_data.csv")
-    refugee_cols = ['WB_Code', 'Refugees_Received', 'Refugees_Produced']
-    unified = unified.merge(refugee[refugee_cols], on='WB_Code', how='left')
-    print(f"+ Refugee data: {refugee['WB_Code'].nunique()} countries")
+    # Refugee data removed — manually compiled estimates are not reliable
     
     # Military data (time series from World Bank API, 2000-2023)
     military = pd.read_csv(data_dir / "military_data.csv")
@@ -100,6 +93,13 @@ def create_unified_csv():
     
     # Sort by country and year
     unified = unified.sort_values(['WB_Code', 'Year']).reset_index(drop=True)
+    
+    # Remove any duplicate rows that arose from outer joins
+    before = len(unified)
+    unified = unified.drop_duplicates(subset=['WB_Code', 'Year'], keep='last')
+    after = len(unified)
+    if before != after:
+        print(f"\nRemoved {before - after} duplicate WB_Code-Year rows")
     
     # Save
     output_path = data_dir / "all_normalization_metrics.csv"

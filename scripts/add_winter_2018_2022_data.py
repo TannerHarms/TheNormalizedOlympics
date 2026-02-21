@@ -9,7 +9,7 @@ NOTE: Since olympic_results.csv doesn't have full team rosters for 2018/2022,
 Total_Medals_Awarded is estimated using country-specific historical multipliers
 from 2014 (most recent year with complete athlete-level data).
 
-Author: Tanner D. Harms, February 2026
+Author: Tanner D. Harms
 """
 
 import pandas as pd
@@ -81,12 +81,20 @@ def extract_athlete_counts(df_results, game_slug, year):
                 all_athletes.add(row['athlete_full_name'].strip())
             # Some rows have team rosters in 'athletes' column
             if pd.notna(row['athletes']):
-                # Parse athletes field - may be comma or slash separated
-                athletes_str = str(row['athletes'])
-                for sep in [',', '/']:
-                    if sep in athletes_str:
-                        for name in athletes_str.split(sep):
-                            all_athletes.add(name.strip())
+                # Parse athletes field - may be comma, slash separated, or a single name
+                athletes_str = str(row['athletes']).strip()
+                if athletes_str:
+                    found_sep = False
+                    for sep in [',', '/']:
+                        if sep in athletes_str:
+                            found_sep = True
+                            for name in athletes_str.split(sep):
+                                name = name.strip()
+                                if name:
+                                    all_athletes.add(name)
+                    if not found_sep:
+                        # Single-name entry (no separator found)
+                        all_athletes.add(athletes_str)
         
         total_athletes = len(all_athletes)
         
@@ -98,11 +106,18 @@ def extract_athlete_counts(df_results, game_slug, year):
             if pd.notna(row['athlete_full_name']):
                 medalist_names.add(row['athlete_full_name'].strip())
             if pd.notna(row['athletes']):
-                athletes_str = str(row['athletes'])
-                for sep in [',', '/']:
-                    if sep in athletes_str:
-                        for name in athletes_str.split(sep):
-                            medalist_names.add(name.strip())
+                athletes_str = str(row['athletes']).strip()
+                if athletes_str:
+                    found_sep = False
+                    for sep in [',', '/']:
+                        if sep in athletes_str:
+                            found_sep = True
+                            for name in athletes_str.split(sep):
+                                name = name.strip()
+                                if name:
+                                    medalist_names.add(name)
+                    if not found_sep:
+                        medalist_names.add(athletes_str)
         
         individual_medalists = len(medalist_names)
         
@@ -251,7 +266,7 @@ def main():
         # Helper function to handle division by zero
         def safe_divide(numerator, denominator, multiplier=1):
             if pd.isna(denominator) or denominator == 0:
-                return float('inf') if numerator > 0 else 0
+                return np.nan
             return (numerator / denominator) * multiplier
         
         # Basic metrics
@@ -285,15 +300,7 @@ def main():
         df_winter.at[idx, 'Medals_Per_100_Work_Hours'] = safe_divide(total, df_winter.at[idx, 'Avg_Work_Hours_Per_Year'], 100)
         
         # Cultural metrics
-        coffee_consumption = df_winter.at[idx, 'Coffee_Consumption_Kg_Per_Capita'] * population
-        df_winter.at[idx, 'Medals_Per_Million_Kg_Coffee'] = safe_divide(total, coffee_consumption, 1_000_000)
-        cola_consumption = df_winter.at[idx, 'Coca_Cola_Servings_Per_Capita'] * population
-        df_winter.at[idx, 'Medals_Per_Million_Cola_Servings'] = safe_divide(total, cola_consumption, 1_000_000)
         df_winter.at[idx, 'Medals_Per_Peace_Index_Point'] = safe_divide(total, df_winter.at[idx, 'Global_Peace_Index_Score'])
-        
-        # Refugee metrics
-        df_winter.at[idx, 'Medals_Per_1000_Refugees_Received'] = safe_divide(total, df_winter.at[idx, 'Refugees_Received'], 1000)
-        df_winter.at[idx, 'Medals_Per_1000_Refugees_Produced'] = safe_divide(total, df_winter.at[idx, 'Refugees_Produced'], 1000)
         
         # Military metrics
         df_winter.at[idx, 'Medals_Per_Pct_Military_Spending'] = safe_divide(total, df_winter.at[idx, 'Military_Expenditure_Pct_GDP'])

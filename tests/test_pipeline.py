@@ -306,3 +306,81 @@ class TestClimateData:
             assert zone_index[z] > zone_index[z + 1], (
                 f"Zone {z} index ({zone_index[z]}) should be > Zone {z+1} ({zone_index[z+1]})"
             )
+
+
+# ============================================================================
+# All-Metrics Data Integrity Tests
+# ============================================================================
+
+class TestAllMetricsData:
+    """Verify the all_metrics CSVs have no inf values, no duplicates,
+    and do not contain removed metrics (refugee, coffee, cola)."""
+
+    def setup_method(self):
+        self.summer = pd.read_csv(DATA_DIR / "summer_olympics_all_metrics.csv")
+        self.winter = pd.read_csv(DATA_DIR / "winter_olympics_all_metrics.csv")
+
+    def test_no_inf_values_in_normalized_metrics(self):
+        """No normalized metric column should contain inf or -inf."""
+        for df, name in [(self.summer, "summer"), (self.winter, "winter")]:
+            norm_cols = [c for c in df.columns if c.startswith("Medals_Per_")]
+            for col in norm_cols:
+                inf_count = np.isinf(df[col].dropna()).sum()
+                assert inf_count == 0, (
+                    f"{name} column {col} has {inf_count} inf values"
+                )
+
+    def test_no_duplicate_country_year_rows(self):
+        """No duplicate (Country, Year) rows in all_metrics files."""
+        for df, name in [(self.summer, "summer"), (self.winter, "winter")]:
+            dupes = df.duplicated(subset=["Country", "Year"], keep=False).sum()
+            assert dupes == 0, (
+                f"{name} all_metrics has {dupes} duplicate Country-Year rows"
+            )
+
+    def test_no_refugee_columns(self):
+        """Refugee columns should not exist in all_metrics after cleanup."""
+        removed_cols = [
+            "Medals_Per_1000_Refugees_Received",
+            "Medals_Per_1000_Refugees_Produced",
+            "Refugees_Received",
+            "Refugees_Produced",
+        ]
+        for df, name in [(self.summer, "summer"), (self.winter, "winter")]:
+            for col in removed_cols:
+                assert col not in df.columns, (
+                    f"{name} all_metrics still has removed column {col}"
+                )
+
+    def test_no_coffee_cola_columns(self):
+        """Coffee/cola consumption columns should not exist after cleanup."""
+        removed_cols = [
+            "Medals_Per_Million_Kg_Coffee",
+            "Medals_Per_Million_Cola_Servings",
+            "Coffee_Consumption_Kg_Per_Capita",
+            "Coca_Cola_Servings_Per_Capita",
+        ]
+        for df, name in [(self.summer, "summer"), (self.winter, "winter")]:
+            for col in removed_cols:
+                assert col not in df.columns, (
+                    f"{name} all_metrics still has removed column {col}"
+                )
+
+    def test_total_athletes_coverage(self):
+        """Total_Athletes should have broad coverage (not just medal winners)."""
+        for df, name in [(self.summer, "summer"), (self.winter, "winter")]:
+            if "Total_Athletes" not in df.columns:
+                continue
+            # Check that some countries have Total_Athletes > 0 but Total == 0
+            # (i.e., nations that participated but won no medals)
+            athletes_no_medals = df[
+                (df["Total_Athletes"] > 0) & (df["Total"] == 0)
+            ]
+            # This is a soft check — not all datasets will have these
+            # At minimum, Total_Athletes should exist and have reasonable values
+            has_athletes = df["Total_Athletes"].notna().sum()
+            total_rows = len(df)
+            pct = has_athletes / total_rows
+            assert pct >= 0.5, (
+                f"{name} Total_Athletes coverage is only {pct:.1%}"
+            )

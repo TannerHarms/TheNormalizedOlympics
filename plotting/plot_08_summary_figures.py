@@ -13,6 +13,7 @@ import matplotlib.cm as cm
 from pathlib import Path
 import sys
 import numpy as np
+from datetime import datetime
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -55,11 +56,7 @@ DATA_SOURCES = {
     'Billion Healthcare Spending': 'Healthcare Spending: World Bank Open Data (2000-2024)',
     'Year Life Expectancy': 'Life Expectancy: World Bank Open Data (1980-2024)',
     '100 Work Hours Per Year': 'Work Hours: OECD Statistics (2023, OECD countries only)',
-    'Million Kg Coffee': 'Coffee Consumption: International Coffee Organization (2024)',
-    'Million Cola Servings': 'Soft Drinks: Estimated from various consumption data (2024)',
     'Peace Index Point': 'Safety: Global Peace Index by Institute for Economics & Peace (2024)',
-    '1000 Refugees Received': 'Refugees Hosted: UNHCR Refugee Statistics (2023). Higher = hosting more refugees while winning medals',
-    '1000 Refugees Produced': 'Refugees Originating: UNHCR Refugee Statistics (2023)',
     'Pct GDP Military Spending': 'Military Expenditure (% of GDP): World Bank / SIPRI (2000-2023)',
     '1000 Military Personnel': 'Active Military Personnel: IISS Military Balance (2024)'
 }
@@ -500,9 +497,9 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
             coverage_text += f'Bar charts show all {len(recent_df)} countries from {most_recent_year}. Trend lines show all countries with 3+ years.'
         else:
             coverage_text += f'Bar charts show all {len(recent_df)} countries from {most_recent_year}. Trend lines filtered (≥{MIN_PARTICIPATIONS} participations, ≥{MIN_MEDALS} medals, 3+ years).'
-    elif metric_name in ['University', 'Sports Stadium', 'Ski Resort', 'Million Kg Coffee', 
-                       'Million Cola Servings', '100 Work Hours Per Year', 'Peace Index Point',
-                       '1000 Refugees Received', '1000 Refugees Produced', '1000 Military Personnel']:
+    elif metric_name in ['University', 'Sports Stadium', 'Ski Resort',
+                       '100 Work Hours Per Year', 'Peace Index Point',
+                       '1000 Military Personnel']:
         coverage_text += '2023-2024 snapshot averaged across all years.'
     elif metric_name in ['100 Sunshine Days', '100 Cm Snowfall', 'Degree Temperature']:
         coverage_text += 'Climate data averaged across space and time.'
@@ -523,7 +520,7 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
                  ha='left', fontsize=11, style='italic', color='gray')
     
     # Author and date line
-    fig.text(0.08, -0.009, 'Prepared by Tanner D. Harms, February 2026',
+    fig.text(0.08, -0.009, f'Prepared by Tanner D. Harms, {datetime.now().strftime("%B %Y")}',
              ha='left', fontsize=10, style='italic', color='gray')
     
     # Save - use consistent folder naming
@@ -556,11 +553,7 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
         'Pct GDP Healthcare Spending': 'pct_gdp_healthcare_spending',
         'Year Life Expectancy': 'year_life_expectancy',
         '100 Work Hours Per Year': '100_work_hours_per_year',
-        'Million Kg Coffee': 'million_kg_coffee',
-        'Million Cola Servings': 'million_cola_servings',
         'Peace Index Point': 'peace_index_point',
-        '1000 Refugees Received': '1000_refugees_received',
-        '1000 Refugees Produced': '1000_refugees_produced',
         'Pct GDP Military Spending': 'pct_gdp_military_spending',
         '1000 Military Personnel': '1000_military_personnel',
         'Pct GDP Education Spending': 'pct_gdp_education_spending',

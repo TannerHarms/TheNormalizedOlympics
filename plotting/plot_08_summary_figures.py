@@ -36,8 +36,8 @@ apply_plot_style()
 
 # Data source descriptions for each metric
 DATA_SOURCES = {
-    'Total Medals (Summer)': 'Olympic Medals: Kaggle (1896-2016) & Wikipedia (2018-2024).',
-    'Total Medals (Winter)': 'Olympic Medals: Kaggle (1896-2016) & Wikipedia (2018-2024).',
+    'Total Medals (Summer)': 'Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026).',
+    'Total Medals (Winter)': 'Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026).'
     'Capita': 'Population: World Bank Open Data (1980-2024)',
     'HDI': 'Human Development Index: UNDP Human Development Reports (1990-2021)',
     'GDP': 'GDP: World Bank Open Data (1980-2024)',
@@ -516,7 +516,7 @@ def create_summary_figure(df, season, metric_name, metric_col, medal_type='Total
         fig.text(0.08, 0.002, f'Data: {data_source}',
                  ha='left', fontsize=11, style='italic', color='gray')
     else:
-        fig.text(0.08, 0.002, f'Data: {data_source}. Olympic Medals: Kaggle (1896-2016) & Wikipedia (2018-2024)',
+        fig.text(0.08, 0.002, f'Data: {data_source}. Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026)',
                  ha='left', fontsize=11, style='italic', color='gray')
     
     # Author and date line

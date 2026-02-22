@@ -31,7 +31,9 @@ NormalizingTheOlympics/
 ├── scripts/
 │   ├── download_kaggle_data.py          # Download Kaggle dataset
 │   ├── process_kaggle_data.py           # Aggregate to country-year totals
-│   ├── add_recent_olympics.py           # Scrape Wikipedia for 2018–2024
+│   ├── add_recent_olympics.py           # Add 2018–2024 data (legacy Wikipedia scraper)
+│   ├── scrape_olympedia.py             # Direct Olympedia scraper (2018–2024)
+│   ├── merge_all_new_data.py           # Merge Olympedia data into all_metrics CSVs
 │   ├── fix_country_names.py             # Convert full names → NOC codes
 │   ├── collect_world_bank_data.py       # Fetch World Bank core indicators
 │   ├── collect_additional_metrics.py    # Fetch World Bank additional indicators

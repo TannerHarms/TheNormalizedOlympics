@@ -38,6 +38,14 @@ kaggle.json
 # Data (if large)
 # data/*.csv
 
+# Olympedia scrape cache (HTML pages, regenerable)
+data/olympedia_cache/
+
+# Large raw data files (can be re-downloaded)
+data/raw/galli_*.csv
+data/raw/olympic_results.pkl
+data/raw/athlete_events_original_backup.csv
+
 # Plots can be regenerated
 plots/*.png
 

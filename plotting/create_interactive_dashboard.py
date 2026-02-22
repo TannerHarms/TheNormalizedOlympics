@@ -233,6 +233,19 @@ def compute_baseline_context_data(df, medal_col):
         return None
     
     country_year_data = {}
+    
+    # Map medal_col to per-type breakdown columns
+    MEDAL_BREAKDOWN = {
+        'Total': ('Gold', 'Silver', 'Bronze'),
+        'Total_Medals_Awarded': ('Gold_Awarded', 'Silver_Awarded', 'Bronze_Awarded'),
+        'Individual_Medalists': ('Gold_Medalists', 'Silver_Medalists', 'Bronze_Medalists'),
+    }
+    has_direct_breakdown = (not is_athlete_type) and (medal_col in MEDAL_BREAKDOWN)
+    if has_direct_breakdown:
+        gold_col, silver_col, bronze_col = MEDAL_BREAKDOWN[medal_col]
+        # Check columns actually exist in data
+        has_direct_breakdown = all(c in df_valid.columns for c in [gold_col, silver_col, bronze_col])
+    
     for _, row in df_valid.iterrows():
         country = row['Country']
         year = str(int(row['Year']))
@@ -252,13 +265,23 @@ def compute_baseline_context_data(df, medal_col):
                 s = medal_val * mp * (silver / total_raw)
                 b = medal_val * mp * (bronze / total_raw)
                 n = medal_val * (1 - mp)
+            elif athletes > 0:
+                # Country sent athletes but won no medals — all are non-medalists
+                g = s = b = 0
+                n = medal_val
             else:
                 g = s = b = n = 0
+        elif has_direct_breakdown:
+            # Use actual per-type columns (exact counts)
+            g = float(row.get(gold_col, 0) or 0)
+            s = float(row.get(silver_col, 0) or 0)
+            b = float(row.get(bronze_col, 0) or 0)
+            n = 0
         else:
             if total_raw > 0:
-                g = (gold / total_raw) * medal_val
-                s = (silver / total_raw) * medal_val
-                b = (bronze / total_raw) * medal_val
+                g = round((gold / total_raw) * medal_val)
+                s = round((silver / total_raw) * medal_val)
+                b = round((bronze / total_raw) * medal_val)
             else:
                 g = s = b = 0
             n = 0
@@ -288,6 +311,13 @@ def _compute_bar_data_for_year(df_filtered, plot_col, medal_col, year, top_n=10)
     has_medals = recent_df['Total'] > 0
     is_athlete_type = (medal_col == 'Total_Athletes')
     
+    # Map medal_col to per-type breakdown columns
+    MEDAL_BREAKDOWN = {
+        'Total': ('Gold', 'Silver', 'Bronze'),
+        'Total_Medals_Awarded': ('Gold_Awarded', 'Silver_Awarded', 'Bronze_Awarded'),
+        'Individual_Medalists': ('Gold_Medalists', 'Silver_Medalists', 'Bronze_Medalists'),
+    }
+    
     recent_df['bronze_norm'] = 0.0
     recent_df['silver_norm'] = 0.0
     recent_df['gold_norm'] = 0.0
@@ -309,6 +339,39 @@ def _compute_bar_data_for_year(df_filtered, plot_col, medal_col, year, top_n=10)
             (recent_df.loc[has_medals, 'Gold'] / recent_df.loc[has_medals, 'Total'])
         )
         recent_df['no_medal_norm'] = metric_vals * no_medal_prop
+    elif medal_col in MEDAL_BREAKDOWN:
+        # Use per-type breakdown columns for accurate medal proportions.
+        # Formula: (per_type_col / medal_total) * metric_vals
+        #   - For baseline (plot_col == medal_col): reduces to per_type_col directly
+        #   - For normalized: proportions the normalized value correctly
+        gold_col, silver_col, bronze_col = MEDAL_BREAKDOWN[medal_col]
+        has_breakdown = gold_col in recent_df.columns
+        has_medal_total = recent_df[medal_col] > 0
+        can_split = has_medals & has_medal_total
+        if has_breakdown:
+            recent_df.loc[can_split, 'gold_norm'] = (
+                recent_df.loc[can_split, gold_col].fillna(0) /
+                recent_df.loc[can_split, medal_col]
+            ) * metric_vals[can_split]
+            recent_df.loc[can_split, 'silver_norm'] = (
+                recent_df.loc[can_split, silver_col].fillna(0) /
+                recent_df.loc[can_split, medal_col]
+            ) * metric_vals[can_split]
+            recent_df.loc[can_split, 'bronze_norm'] = (
+                recent_df.loc[can_split, bronze_col].fillna(0) /
+                recent_df.loc[can_split, medal_col]
+            ) * metric_vals[can_split]
+        else:
+            # Fallback: ratio split using event-based Gold/Total
+            recent_df.loc[has_medals, 'gold_norm'] = (
+                (recent_df.loc[has_medals, 'Gold'] / recent_df.loc[has_medals, 'Total']) * metric_vals[has_medals]
+            )
+            recent_df.loc[has_medals, 'silver_norm'] = (
+                (recent_df.loc[has_medals, 'Silver'] / recent_df.loc[has_medals, 'Total']) * metric_vals[has_medals]
+            )
+            recent_df.loc[has_medals, 'bronze_norm'] = (
+                (recent_df.loc[has_medals, 'Bronze'] / recent_df.loc[has_medals, 'Total']) * metric_vals[has_medals]
+            )
     else:
         recent_df.loc[has_medals, 'bronze_norm'] = (
             (recent_df.loc[has_medals, 'Bronze'] / recent_df.loc[has_medals, 'Total']) * metric_vals[has_medals]
@@ -440,6 +503,19 @@ def compute_plot_data(df, medal_col, metric_col, start_year, end_year):
     
     all_trend_years = sorted(df_trends['Year'].unique()) if len(df_trends) > 0 else []
     
+    # All qualified country trends for dropdown selection
+    all_country_trends = []
+    for country in median_metrics.index:
+        cd = df_trends[df_trends['Country'] == country].sort_values('Year')
+        median_val = cd[plot_col].median()
+        all_country_trends.append({
+            'country': country,
+            'median': round(float(median_val), 4),
+            'years': [int(y) for y in cd['Year'].tolist()],
+            'values': [round(float(v), 4) for v in cd[plot_col].tolist()],
+        })
+    all_country_trends.sort(key=lambda x: x['country'])
+    
     # Coverage stats
     countries_with_data = len(df_filtered['Country'].unique())
     total_olympic_countries = len(df[(df['Year'] >= start_year) & (df['Year'] <= end_year)]['Country'].unique())
@@ -450,6 +526,7 @@ def compute_plot_data(df, medal_col, metric_col, start_year, end_year):
         'bar_data_by_year': bar_data_by_year,
         'top_trends': top_trend_data,
         'bottom_trends': bottom_trend_data,
+        'all_country_trends': all_country_trends,
         'all_trend_years': [int(y) for y in all_trend_years],
         'most_recent_year': int(most_recent_year),
         'countries_with_data': int(countries_with_data),
@@ -752,6 +829,33 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
             height: 520px;
             margin-bottom: 5px;
         }}
+        .trend-controls {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 6px 0 10px 0;
+            padding: 6px 10px;
+            font-family: 'Times New Roman', serif;
+            font-size: 14px;
+            color: var(--fg);
+        }}
+        .trend-controls label {{
+            font-weight: bold;
+            white-space: nowrap;
+        }}
+        .trend-controls select {{
+            padding: 4px 8px;
+            border: 1px solid var(--ctx-border);
+            border-radius: 4px;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: 'Times New Roman', serif;
+            font-size: 13px;
+            min-width: 180px;
+        }}
+        .trend-controls .ctx-toggle {{
+            margin-left: 8px;
+        }}
         #contextSection {{
             margin-top: 20px;
             border-top: 2px solid var(--ctx-border);
@@ -946,6 +1050,11 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
             <div id="plotBottomBars" class="plot-cell"></div>
         </div>
         <div id="plotTrends"></div>
+        <div class="trend-controls">
+            <label for="trendCountrySelect">Highlight Nation:</label>
+            <select id="trendCountrySelect"><option value="">\u2014 None \u2014</option></select>
+            <button id="toggleTopBottom" class="ctx-toggle" title="Toggle top/bottom performer lines">Hide Top/Bottom</button>
+        </div>
         
         <div id="contextSection" style="display:none;">
             <div class="context-header">
@@ -1025,6 +1134,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
             var traces = [];
             var legendGroup = showLegend ? 'bars' : 'bars2';
             var barLine = TH().barOutline;
+            var mFmt = isAthlete ? '.2f' : '.0f';
             if (isAthlete) {{
                 traces.push({{
                     x: countries, y: nomedal, type: 'bar', name: 'No Medal',
@@ -1037,19 +1147,19 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                 x: countries, y: bronze, type: 'bar', name: 'Bronze',
                 marker: {{ color: MEDAL_COLORS.Bronze, line: {{ color: barLine, width: 1.5 }} }},
                 legendgroup: legendGroup, showlegend: showLegend,
-                hovertemplate: '<b>%{{x}}</b><br>Bronze: %{{y:.2f}}<extra></extra>'
+                hovertemplate: '<b>%{{x}}</b><br>Bronze: %{{y:' + mFmt + '}}<extra></extra>'
             }});
             traces.push({{
                 x: countries, y: silver, type: 'bar', name: 'Silver',
                 marker: {{ color: MEDAL_COLORS.Silver, line: {{ color: barLine, width: 1.5 }} }},
                 legendgroup: legendGroup, showlegend: showLegend,
-                hovertemplate: '<b>%{{x}}</b><br>Silver: %{{y:.2f}}<extra></extra>'
+                hovertemplate: '<b>%{{x}}</b><br>Silver: %{{y:' + mFmt + '}}<extra></extra>'
             }});
             traces.push({{
                 x: countries, y: gold, type: 'bar', name: 'Gold',
                 marker: {{ color: MEDAL_COLORS.Gold, line: {{ color: barLine, width: 1.5 }} }},
                 legendgroup: legendGroup, showlegend: showLegend,
-                hovertemplate: '<b>%{{x}}</b><br>Gold: %{{y:.2f}}<extra></extra>'
+                hovertemplate: '<b>%{{x}}</b><br>Gold: %{{y:' + mFmt + '}}<extra></extra>'
             }});
             return traces;
         }}
@@ -1081,6 +1191,247 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     Plotly.restyle(gd, {{ 'marker.opacity': [ones] }}, [ti]);
                 }}
             }});
+        }}
+        
+        // --- Trend plot state (persisted across updatePlot calls) ---
+        var _trendData = null;
+        var _trendStartYear = 0;
+        var _trendEndYear = 9999;
+        var _hideTopBottom = false;
+        var _trendPlotConfig = null;
+        
+        function renderTrendPlot() {{
+            var data = _trendData;
+            if (!data) return;
+            var startYear = _trendStartYear;
+            var endYear = _trendEndYear;
+            var t = TH();
+            var _dark = document.body.classList.contains('dark-theme');
+            var plotConfig = _trendPlotConfig || {{ displayModeBar: true, displaylogo: false, responsive: true,
+                modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'] }};
+            
+            var trendTraces = [];
+            var numTopBottom = 0;
+            
+            if (!_hideTopBottom) {{
+                // Top performers (Reds, circle markers, solid lines) - left y-axis
+                for (var ti = 0; ti < data.top_trends.length; ti++) {{
+                    var ct = data.top_trends[ti];
+                    var tColor = _dark ? ct.color_dark : ct.color;
+                    var tx = [], ty = [];
+                    for (var j = 0; j < ct.years.length; j++) {{
+                        if (ct.years[j] >= startYear && ct.years[j] <= endYear) {{
+                            tx.push(ct.years[j]);
+                            ty.push(ct.values[j]);
+                        }}
+                    }}
+                    trendTraces.push({{
+                        x: tx, y: ty, type: 'scatter', mode: 'lines+markers',
+                        name: ct.country + ': ' + ct.median.toFixed(3),
+                        legendgroup: 'top',
+                        legendgrouptitle: (ti === 0) ? {{ text: 'Top Performers', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
+                        marker: {{ symbol: 'circle', size: 8, color: tColor }},
+                        line: {{ color: tColor, width: 2.5, dash: 'solid' }},
+                        hovertemplate: '<b>' + ct.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + ct.median.toFixed(3) + '<extra></extra>'
+                    }});
+                }}
+                
+                // Bottom performers (Blues, square markers, dashed lines) - right y-axis
+                for (var b = 0; b < data.bottom_trends.length; b++) {{
+                    var cb = data.bottom_trends[b];
+                    var bColor = _dark ? cb.color_dark : cb.color;
+                    var bx = [], by = [];
+                    for (var k = 0; k < cb.years.length; k++) {{
+                        if (cb.years[k] >= startYear && cb.years[k] <= endYear) {{
+                            bx.push(cb.years[k]);
+                            by.push(cb.values[k]);
+                        }}
+                    }}
+                    trendTraces.push({{
+                        x: bx, y: by, yaxis: 'y2',
+                        type: 'scatter', mode: 'lines+markers',
+                        name: cb.country + ': ' + cb.median.toFixed(3),
+                        legendgroup: 'bottom',
+                        legendgrouptitle: (b === 0) ? {{ text: 'Bottom Performers', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
+                        marker: {{ symbol: 'square', size: 8, color: bColor }},
+                        line: {{ color: bColor, width: 2.5, dash: 'dash' }},
+                        hovertemplate: '<b>' + cb.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + cb.median.toFixed(3) + '<extra></extra>'
+                    }});
+                }}
+                numTopBottom = trendTraces.length;
+            }}
+            
+            // Selected country from dropdown (green line)
+            var selectedCountry = document.getElementById('trendCountrySelect').value;
+            var selectedTraceIdx = -1;
+            if (selectedCountry && data.all_country_trends) {{
+                for (var sc = 0; sc < data.all_country_trends.length; sc++) {{
+                    if (data.all_country_trends[sc].country === selectedCountry) {{
+                        var scData = data.all_country_trends[sc];
+                        var sx = [], sy = [];
+                        for (var si = 0; si < scData.years.length; si++) {{
+                            if (scData.years[si] >= startYear && scData.years[si] <= endYear) {{
+                                sx.push(scData.years[si]);
+                                sy.push(scData.values[si]);
+                            }}
+                        }}
+                        if (sx.length > 0) {{
+                            selectedTraceIdx = trendTraces.length;
+                            var greenColor = _dark ? '#44ff88' : '#118833';
+                            trendTraces.push({{
+                                x: sx, y: sy, type: 'scatter', mode: 'lines+markers',
+                                name: scData.country + ': ' + scData.median.toFixed(3),
+                                legendgroup: 'selected',
+                                legendgrouptitle: {{ text: 'Selected Nation', font: {{ size: 14, family: FONT().family, color: t.annotation }} }},
+                                marker: {{ symbol: 'diamond', size: 10, color: greenColor }},
+                                line: {{ color: greenColor, width: 3.5, dash: 'solid' }},
+                                hovertemplate: '<b>' + scData.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + scData.median.toFixed(3) + '<extra></extra>'
+                            }});
+                        }}
+                        break;
+                    }}
+                }}
+            }}
+            
+            // Build x-axis tick values from trend years in selected range
+            var tickYears = [];
+            for (var ay = 0; ay < data.all_trend_years.length; ay++) {{
+                if (data.all_trend_years[ay] >= startYear && data.all_trend_years[ay] <= endYear) {{
+                    tickYears.push(data.all_trend_years[ay]);
+                }}
+            }}
+            
+            var trendLayout = {{
+                font: FONT(),
+                margin: {{ l: 80, r: 80, t: 30, b: 80 }},
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: {{
+                    tickvals: tickYears,
+                    ticktext: tickYears.map(function(y) {{ return String(y); }}),
+                    tickangle: -45,
+                    tickfont: {{ size: 18, family: FONT().family, color: t.fg }},
+                    showline: true, linewidth: 1, linecolor: t.axisLine, mirror: true
+                }},
+                yaxis: {{
+                    side: 'left',
+                    tickfont: {{ size: 18, color: t.trendLeft, family: FONT().family }},
+                    showline: true, linewidth: 1, linecolor: t.axisLine,
+                    gridcolor: t.gridColor, griddash: 'dash', gridwidth: 0.7, zeroline: false
+                }},
+                yaxis2: {{
+                    side: 'right', overlaying: 'y',
+                    tickfont: {{ size: 18, color: t.trendRight, family: FONT().family }},
+                    showline: true, linewidth: 1, linecolor: t.axisLine,
+                    zeroline: false, showgrid: false
+                }},
+                showlegend: true,
+                legend: {{
+                    x: 1.08, y: 1, xanchor: 'left', yanchor: 'top',
+                    bgcolor: t.legendBg,
+                    bordercolor: t.legendBorder, borderwidth: 1,
+                    font: {{ size: 14, family: FONT().family, color: t.fg }},
+                    tracegroupgap: 20,
+                    traceorder: 'grouped'
+                }},
+                hovermode: 'closest',
+                annotations: [{{
+                    text: '<b>Trends</b>',
+                    xref: 'paper', yref: 'paper', x: 0.02, y: 0.98,
+                    showarrow: false, xanchor: 'left', yanchor: 'top',
+                    font: {{ size: 24, family: FONT().family, color: t.annotation }}
+                }}]
+            }};
+            Plotly.newPlot('plotTrends', trendTraces, trendLayout, plotConfig);
+            
+            // Line highlighting on hover: dim all other traces, bold the hovered one
+            var trendDiv = document.getElementById('plotTrends');
+            trendDiv.on('plotly_hover', function(eventData) {{
+                var hoveredIndex = eventData.points[0].curveNumber;
+                var update = {{}};
+                for (var i = 0; i < trendTraces.length; i++) {{
+                    if (i === hoveredIndex) {{
+                        update['line.width'] = update['line.width'] || [];
+                        update['marker.size'] = update['marker.size'] || [];
+                        update['opacity'] = update['opacity'] || [];
+                        update['line.width'].push(4);
+                        update['marker.size'].push(11);
+                        update['opacity'].push(1);
+                    }} else {{
+                        update['line.width'] = update['line.width'] || [];
+                        update['marker.size'] = update['marker.size'] || [];
+                        update['opacity'] = update['opacity'] || [];
+                        update['line.width'].push(1.5);
+                        update['marker.size'].push(6);
+                        update['opacity'].push(0.2);
+                    }}
+                }}
+                var indices = [];
+                for (var idx = 0; idx < trendTraces.length; idx++) indices.push(idx);
+                Plotly.restyle(trendDiv, {{
+                    'line.width': update['line.width'],
+                    'marker.size': update['marker.size'],
+                    'opacity': update['opacity']
+                }}, indices);
+            }});
+            trendDiv.on('plotly_unhover', function() {{
+                var widths = [], sizes = [], opacities = [];
+                for (var i = 0; i < trendTraces.length; i++) {{
+                    widths.push(i === selectedTraceIdx ? 3.5 : 2.5);
+                    sizes.push(i === selectedTraceIdx ? 10 : 8);
+                    opacities.push(1);
+                }}
+                var indices = [];
+                for (var idx = 0; idx < trendTraces.length; idx++) indices.push(idx);
+                Plotly.restyle(trendDiv, {{
+                    'line.width': widths,
+                    'marker.size': sizes,
+                    'opacity': opacities
+                }}, indices);
+            }});
+            
+            // Legend hover highlighting
+            (function attachLegendHover() {{
+                var legendItems = trendDiv.querySelectorAll('.legend .traces');
+                var numTraces = trendTraces.length;
+                
+                function highlightTrace(hoveredIdx) {{
+                    var update = {{ 'line.width': [], 'marker.size': [], 'opacity': [] }};
+                    for (var i = 0; i < numTraces; i++) {{
+                        if (i === hoveredIdx) {{
+                            update['line.width'].push(4);
+                            update['marker.size'].push(11);
+                            update['opacity'].push(1);
+                        }} else {{
+                            update['line.width'].push(1.5);
+                            update['marker.size'].push(6);
+                            update['opacity'].push(0.2);
+                        }}
+                    }}
+                    var indices = [];
+                    for (var idx = 0; idx < numTraces; idx++) indices.push(idx);
+                    Plotly.restyle(trendDiv, update, indices);
+                }}
+                
+                function resetTraces() {{
+                    var widths = [], sizes = [], opacities = [];
+                    for (var i = 0; i < numTraces; i++) {{
+                        widths.push(i === selectedTraceIdx ? 3.5 : 2.5);
+                        sizes.push(i === selectedTraceIdx ? 10 : 8);
+                        opacities.push(1);
+                    }}
+                    var indices = [];
+                    for (var idx = 0; idx < numTraces; idx++) indices.push(idx);
+                    Plotly.restyle(trendDiv, {{ 'line.width': widths, 'marker.size': sizes, 'opacity': opacities }}, indices);
+                }}
+                
+                for (var li = 0; li < legendItems.length; li++) {{
+                    (function(idx) {{
+                        legendItems[idx].addEventListener('mouseenter', function() {{ highlightTrace(idx); }});
+                        legendItems[idx].addEventListener('mouseleave', function() {{ resetTraces(); }});
+                    }})(li);
+                }}
+            }})();
         }}
         
         function updatePlot() {{
@@ -1220,190 +1571,41 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                 Plotly.newPlot('plotBottomBars', botTraces, botLayout, plotConfig);
                 attachBarHoverFade('plotBottomBars');
                 
-                // ---- Trend plot: Dual y-axis ----
-                var trendTraces = [];
+                // ---- Trend plot: store state and render ----
+                _trendData = data;
+                _trendStartYear = startYear;
+                _trendEndYear = endYear;
+                _trendPlotConfig = plotConfig;
                 
-                // Top performers (Reds, circle markers, solid lines) - left y-axis
-                var _dark = document.body.classList.contains('dark-theme');
-                for (var ti = 0; ti < data.top_trends.length; ti++) {{
-                    var ct = data.top_trends[ti];
-                    var tColor = _dark ? ct.color_dark : ct.color;
-                    var tx = [], ty = [];
-                    for (var j = 0; j < ct.years.length; j++) {{
-                        if (ct.years[j] >= startYear && ct.years[j] <= endYear) {{
-                            tx.push(ct.years[j]);
-                            ty.push(ct.values[j]);
-                        }}
+                // Populate nation dropdown (preserve selection if still valid)
+                var trendSelect = document.getElementById('trendCountrySelect');
+                var prevSelected = trendSelect.value;
+                trendSelect.innerHTML = '<option value="">\u2014 None \u2014</option>';
+                if (data.all_country_trends) {{
+                    for (var ci = 0; ci < data.all_country_trends.length; ci++) {{
+                        var opt = document.createElement('option');
+                        opt.value = data.all_country_trends[ci].country;
+                        opt.textContent = data.all_country_trends[ci].country;
+                        trendSelect.appendChild(opt);
                     }}
-                    trendTraces.push({{
-                        x: tx, y: ty, type: 'scatter', mode: 'lines+markers',
-                        name: ct.country + ': ' + ct.median.toFixed(3),
-                        legendgroup: 'top',
-                        legendgrouptitle: (ti === 0) ? {{ text: 'Top Performers', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
-                        marker: {{ symbol: 'circle', size: 8, color: tColor }},
-                        line: {{ color: tColor, width: 2.5, dash: 'solid' }},
-                        hovertemplate: '<b>' + ct.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + ct.median.toFixed(3) + '<extra></extra>'
-                    }});
                 }}
-                
-                // Bottom performers (Blues, square markers, dashed lines) - right y-axis
-                for (var b = 0; b < data.bottom_trends.length; b++) {{
-                    var cb = data.bottom_trends[b];
-                    var bColor = _dark ? cb.color_dark : cb.color;
-                    var bx = [], by = [];
-                    for (var k = 0; k < cb.years.length; k++) {{
-                        if (cb.years[k] >= startYear && cb.years[k] <= endYear) {{
-                            bx.push(cb.years[k]);
-                            by.push(cb.values[k]);
+                // Restore previous selection if country still exists in list
+                if (prevSelected) {{
+                    for (var ri = 0; ri < trendSelect.options.length; ri++) {{
+                        if (trendSelect.options[ri].value === prevSelected) {{
+                            trendSelect.value = prevSelected;
+                            break;
                         }}
-                    }}
-                    trendTraces.push({{
-                        x: bx, y: by, yaxis: 'y2',
-                        type: 'scatter', mode: 'lines+markers',
-                        name: cb.country + ': ' + cb.median.toFixed(3),
-                        legendgroup: 'bottom',
-                        legendgrouptitle: (b === 0) ? {{ text: 'Bottom Performers', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
-                        marker: {{ symbol: 'square', size: 8, color: bColor }},
-                        line: {{ color: bColor, width: 2.5, dash: 'dash' }},
-                        hovertemplate: '<b>' + cb.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + cb.median.toFixed(3) + '<extra></extra>'
-                    }});
-                }}
-                
-                // Build x-axis tick values from trend years in selected range
-                var tickYears = [];
-                for (var ay = 0; ay < data.all_trend_years.length; ay++) {{
-                    if (data.all_trend_years[ay] >= startYear && data.all_trend_years[ay] <= endYear) {{
-                        tickYears.push(data.all_trend_years[ay]);
                     }}
                 }}
                 
-                var trendLayout = {{
-                    font: FONT(),
-                    margin: {{ l: 80, r: 80, t: 30, b: 80 }},
-                    plot_bgcolor: 'rgba(0,0,0,0)',
-                    paper_bgcolor: 'rgba(0,0,0,0)',
-                    xaxis: {{
-                        tickvals: tickYears,
-                        ticktext: tickYears.map(function(y) {{ return String(y); }}),
-                        tickangle: -45,
-                        tickfont: {{ size: 18, family: FONT().family, color: t.fg }},
-                        showline: true, linewidth: 1, linecolor: t.axisLine, mirror: true
-                    }},
-                    yaxis: {{
-                        side: 'left',
-                        tickfont: {{ size: 18, color: t.trendLeft, family: FONT().family }},
-                        showline: true, linewidth: 1, linecolor: t.axisLine,
-                        gridcolor: t.gridColor, griddash: 'dash', gridwidth: 0.7, zeroline: false
-                    }},
-                    yaxis2: {{
-                        side: 'right', overlaying: 'y',
-                        tickfont: {{ size: 18, color: t.trendRight, family: FONT().family }},
-                        showline: true, linewidth: 1, linecolor: t.axisLine,
-                        zeroline: false, showgrid: false
-                    }},
-                    showlegend: true,
-                    legend: {{
-                        x: 1.08, y: 1, xanchor: 'left', yanchor: 'top',
-                        bgcolor: t.legendBg,
-                        bordercolor: t.legendBorder, borderwidth: 1,
-                        font: {{ size: 14, family: FONT().family, color: t.fg }},
-                        tracegroupgap: 20,
-                        traceorder: 'grouped'
-                    }},
-                    hovermode: 'closest',
-                    annotations: [{{
-                        text: '<b>Trends</b>',
-                        xref: 'paper', yref: 'paper', x: 0.02, y: 0.98,
-                        showarrow: false, xanchor: 'left', yanchor: 'top',
-                        font: {{ size: 24, family: FONT().family, color: t.annotation }}
-                    }}]
-                }};
-                Plotly.newPlot('plotTrends', trendTraces, trendLayout, plotConfig);
+                // Update toggle button text
+                var togBtn = document.getElementById('toggleTopBottom');
+                togBtn.textContent = _hideTopBottom ? 'Show Top/Bottom' : 'Hide Top/Bottom';
+                if (_hideTopBottom) togBtn.classList.add('active');
+                else togBtn.classList.remove('active');
                 
-                // Line highlighting on hover: dim all other traces, bold the hovered one
-                var trendDiv = document.getElementById('plotTrends');
-                trendDiv.on('plotly_hover', function(eventData) {{
-                    var hoveredIndex = eventData.points[0].curveNumber;
-                    var update = {{}};
-                    for (var i = 0; i < trendTraces.length; i++) {{
-                        if (i === hoveredIndex) {{
-                            update['line.width'] = update['line.width'] || [];
-                            update['marker.size'] = update['marker.size'] || [];
-                            update['opacity'] = update['opacity'] || [];
-                            update['line.width'].push(4);
-                            update['marker.size'].push(11);
-                            update['opacity'].push(1);
-                        }} else {{
-                            update['line.width'] = update['line.width'] || [];
-                            update['marker.size'] = update['marker.size'] || [];
-                            update['opacity'] = update['opacity'] || [];
-                            update['line.width'].push(1.5);
-                            update['marker.size'].push(6);
-                            update['opacity'].push(0.2);
-                        }}
-                    }}
-                    var indices = [];
-                    for (var idx = 0; idx < trendTraces.length; idx++) indices.push(idx);
-                    Plotly.restyle(trendDiv, {{
-                        'line.width': update['line.width'],
-                        'marker.size': update['marker.size'],
-                        'opacity': update['opacity']
-                    }}, indices);
-                }});
-                trendDiv.on('plotly_unhover', function() {{
-                    var widths = [], sizes = [], opacities = [];
-                    for (var i = 0; i < trendTraces.length; i++) {{
-                        widths.push(2.5);
-                        sizes.push(8);
-                        opacities.push(1);
-                    }}
-                    var indices = [];
-                    for (var idx = 0; idx < trendTraces.length; idx++) indices.push(idx);
-                    Plotly.restyle(trendDiv, {{
-                        'line.width': widths,
-                        'marker.size': sizes,
-                        'opacity': opacities
-                    }}, indices);
-                }});
-                
-                // Legend hover highlighting: bind mouseover/mouseout to legend DOM entries
-                (function attachLegendHover() {{
-                    var legendItems = trendDiv.querySelectorAll('.legend .traces');
-                    var numTraces = trendTraces.length;
-                    
-                    function highlightTrace(hoveredIdx) {{
-                        var update = {{ 'line.width': [], 'marker.size': [], 'opacity': [] }};
-                        for (var i = 0; i < numTraces; i++) {{
-                            if (i === hoveredIdx) {{
-                                update['line.width'].push(4);
-                                update['marker.size'].push(11);
-                                update['opacity'].push(1);
-                            }} else {{
-                                update['line.width'].push(1.5);
-                                update['marker.size'].push(6);
-                                update['opacity'].push(0.2);
-                            }}
-                        }}
-                        var indices = [];
-                        for (var idx = 0; idx < numTraces; idx++) indices.push(idx);
-                        Plotly.restyle(trendDiv, update, indices);
-                    }}
-                    
-                    function resetTraces() {{
-                        var widths = [], sizes = [], opacities = [];
-                        for (var i = 0; i < numTraces; i++) {{ widths.push(2.5); sizes.push(8); opacities.push(1); }}
-                        var indices = [];
-                        for (var idx = 0; idx < numTraces; idx++) indices.push(idx);
-                        Plotly.restyle(trendDiv, {{ 'line.width': widths, 'marker.size': sizes, 'opacity': opacities }}, indices);
-                    }}
-                    
-                    for (var li = 0; li < legendItems.length; li++) {{
-                        (function(idx) {{
-                            legendItems[idx].addEventListener('mouseenter', function() {{ highlightTrace(idx); }});
-                            legendItems[idx].addEventListener('mouseleave', function() {{ resetTraces(); }});
-                        }})(li);
-                    }}
-                }})();
+                renderTrendPlot();
                 
                 // ---- Context plot: baseline medal bars or raw normalization metric ----
                 var ctxSection = document.getElementById('contextSection');
@@ -1477,28 +1679,29 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                                 legendgroup: 'ctx', showlegend: true
                             }});
                         }}
+                        var hFmt = ctx.is_athlete_type ? '.2f' : '.0f';
                         ctxTraces.push({{
                             x: sC, y: sB, type: 'bar', name: 'Bronze',
                             marker: {{ color: MEDAL_COLORS.Bronze, line: {{ color: t.barOutline, width: 0.8 }} }},
-                            hovertemplate: '<b>%{{x}}</b><br>Bronze: %{{y:.2f}}<extra></extra>',
+                            hovertemplate: '<b>%{{x}}</b><br>Bronze: %{{y:' + hFmt + '}}<extra></extra>',
                             legendgroup: 'ctx', showlegend: true
                         }});
                         ctxTraces.push({{
                             x: sC, y: sS, type: 'bar', name: 'Silver',
                             marker: {{ color: MEDAL_COLORS.Silver, line: {{ color: t.barOutline, width: 0.8 }} }},
-                            hovertemplate: '<b>%{{x}}</b><br>Silver: %{{y:.2f}}<extra></extra>',
+                            hovertemplate: '<b>%{{x}}</b><br>Silver: %{{y:' + hFmt + '}}<extra></extra>',
                             legendgroup: 'ctx', showlegend: true
                         }});
                         ctxTraces.push({{
                             x: sC, y: sG, type: 'bar', name: 'Gold',
                             marker: {{ color: MEDAL_COLORS.Gold, line: {{ color: t.barOutline, width: 0.8 }} }},
-                            hovertemplate: '<b>%{{x}}</b><br>Gold: %{{y:.2f}}<extra></extra>',
+                            hovertemplate: '<b>%{{x}}</b><br>Gold: %{{y:' + hFmt + '}}<extra></extra>',
                             legendgroup: 'ctx', showlegend: true
                         }});
                         
                         ctxTitle = data.display_name + ' \u2014 Ranks ' + rankFrom + '\u2013' + Math.min(rankTo, nTotal) + ' of ' + nTotal + ' (' + ctxYear + ')';
                         yAxisTitle = data.display_name;
-                        ctxSource = 'Olympic Medals: Kaggle (1896-2016) & Wikipedia (2018-2024). Year shown: ' + ctxYear + '.';
+                        ctxSource = 'Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026). Year shown: ' + ctxYear + '.';
                         
                     }} else {{
                         // Normalization context: earth-tone bars for raw metric
@@ -1594,11 +1797,11 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                 var maxY = Math.max.apply(null, years);
                 document.getElementById('coverageText').textContent = 
                     'Trend values show median. Coverage: ' + data.countries_with_data + '/' + 
-                    data.total_olympic_countries + ' medal-winning nations in range (' + 
+                    data.total_olympic_countries + ' participating nations in range (' + 
                     minY + '-' + maxY + ') (' + data.coverage_pct + '%). ' +
                     'Bar charts show top/bottom 10 from ' + selectedBarYear + '.';
                 document.getElementById('sourceText').textContent = 
-                    'Olympic Medals: Kaggle (1896-2016) & Wikipedia (2018-2024).';
+                    'Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026).';
                     
             }} catch (e) {{
                 showError('Error rendering plots: ' + e.message);
@@ -1636,6 +1839,17 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
         }});
         document.getElementById('ctxRankFrom').addEventListener('change', updatePlot);
         document.getElementById('ctxRankTo').addEventListener('change', updatePlot);
+        // Trend controls: nation dropdown and top/bottom toggle
+        document.getElementById('trendCountrySelect').addEventListener('change', function() {{
+            renderTrendPlot();
+        }});
+        document.getElementById('toggleTopBottom').addEventListener('click', function() {{
+            _hideTopBottom = !_hideTopBottom;
+            this.textContent = _hideTopBottom ? 'Show Top/Bottom' : 'Hide Top/Bottom';
+            if (_hideTopBottom) this.classList.add('active');
+            else this.classList.remove('active');
+            renderTrendPlot();
+        }});
         // Theme toggle
         document.getElementById('themeToggle').addEventListener('click', function() {{
             document.body.classList.toggle('dark-theme');
@@ -1657,10 +1871,12 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
             var toggleWrap = document.querySelector('.theme-toggle-wrap');
             var modebars = document.querySelectorAll('.modebar-container');
             var ctxBtns = document.querySelectorAll('.context-header button, .context-header input, .ctx-rank-label');
+            var trendCtrls = document.querySelector('.trend-controls');
             controls.style.display = 'none';
             toggleWrap.style.display = 'none';
             modebars.forEach(function(m) {{ m.style.display = 'none'; }});
             ctxBtns.forEach(function(el) {{ el.style.display = 'none'; }});
+            if (trendCtrls) trendCtrls.style.display = 'none';
 
             // Force light theme for PDF
             var wasDark = document.body.classList.contains('dark-theme');
@@ -1696,6 +1912,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     toggleWrap.style.display = '';
                     modebars.forEach(function(m) {{ m.style.display = ''; }});
                     ctxBtns.forEach(function(el) {{ el.style.display = ''; }});
+                    if (trendCtrls) trendCtrls.style.display = '';
                     if (wasDark) {{
                         document.body.classList.add('dark-theme');
                         updatePlot();

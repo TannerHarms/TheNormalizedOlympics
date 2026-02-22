@@ -117,7 +117,7 @@ class TestMedalData:
 
     def test_winter_year_range(self):
         assert self.winter["Year"].min() == 1924
-        assert self.winter["Year"].max() == 2022
+        assert self.winter["Year"].max() == 2026
 
     def test_country_codes_are_short(self):
         """All country identifiers should be NOC codes (≤3 chars), not full names."""

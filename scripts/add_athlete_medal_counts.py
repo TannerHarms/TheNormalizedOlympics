@@ -78,14 +78,53 @@ def compute_athlete_medal_counts():
         .reset_index(name='Total_Medals_Awarded')
     )
     
-    # Merge all three
+    # --- Per-medal-type awarded counts ---
+    # Gold_Awarded / Silver_Awarded / Bronze_Awarded: athlete-medal rows per type
+    for medal_type in ['Gold', 'Silver', 'Bronze']:
+        col_name = f'{medal_type}_Awarded'
+        type_awarded = (
+            medals[medals['Medal'] == medal_type]
+            .groupby(['Year', 'Season', 'NOC'])
+            .size()
+            .reset_index(name=col_name)
+        )
+        total_awarded = total_awarded.merge(type_awarded, on=['Year', 'Season', 'NOC'], how='left')
+        total_awarded[col_name] = total_awarded[col_name].fillna(0).astype(int)
+    
+    # --- Per-medal-type medalist counts (by highest medal won) ---
+    # Assign each unique medalist to their highest medal: Gold > Silver > Bronze
+    medal_rank = {'Gold': 3, 'Silver': 2, 'Bronze': 1}
+    medals_ranked = medals.copy()
+    medals_ranked['_rank'] = medals_ranked['Medal'].map(medal_rank)
+    best_medal = (
+        medals_ranked.groupby(['Year', 'Season', 'NOC', 'ID'])['_rank']
+        .max()
+        .reset_index()
+    )
+    rank_to_medal = {3: 'Gold', 2: 'Silver', 1: 'Bronze'}
+    best_medal['_best'] = best_medal['_rank'].map(rank_to_medal)
+    
+    for medal_type in ['Gold', 'Silver', 'Bronze']:
+        col_name = f'{medal_type}_Medalists'
+        type_medalists = (
+            best_medal[best_medal['_best'] == medal_type]
+            .groupby(['Year', 'Season', 'NOC'])['ID']
+            .nunique()
+            .reset_index(name=col_name)
+        )
+        individual = individual.merge(type_medalists, on=['Year', 'Season', 'NOC'], how='left')
+        individual[col_name] = individual[col_name].fillna(0).astype(int)
+    
+    # Merge all
     athlete_counts = total_athletes.merge(individual, on=['Year', 'Season', 'NOC'], how='left')
     athlete_counts = athlete_counts.merge(total_awarded, on=['Year', 'Season', 'NOC'], how='left')
     athlete_counts = athlete_counts.rename(columns={'NOC': 'Country'})
     
     # Fill NaN (countries with no medals) with 0
-    athlete_counts['Individual_Medalists'] = athlete_counts['Individual_Medalists'].fillna(0).astype(int)
-    athlete_counts['Total_Medals_Awarded'] = athlete_counts['Total_Medals_Awarded'].fillna(0).astype(int)
+    for col in ['Individual_Medalists', 'Total_Medals_Awarded',
+                'Gold_Awarded', 'Silver_Awarded', 'Bronze_Awarded',
+                'Gold_Medalists', 'Silver_Medalists', 'Bronze_Medalists']:
+        athlete_counts[col] = athlete_counts[col].fillna(0).astype(int)
     
     print(f"\nComputed counts for {len(athlete_counts):,} country-year-season combinations")
     
@@ -121,14 +160,18 @@ def merge_into_all_metrics(athlete_counts):
         orig_cols = len(df.columns)
         
         # Drop existing columns if re-running
-        for col in ['Total_Athletes', 'Individual_Medalists', 'Total_Medals_Awarded']:
+        drop_cols = ['Total_Athletes', 'Individual_Medalists', 'Total_Medals_Awarded',
+                     'Gold_Awarded', 'Silver_Awarded', 'Bronze_Awarded',
+                     'Gold_Medalists', 'Silver_Medalists', 'Bronze_Medalists']
+        for col in drop_cols:
             if col in df.columns:
                 df = df.drop(columns=[col])
         
         # Filter athlete counts to this season
-        season_counts = athlete_counts[athlete_counts['Season'] == season][
-            ['Year', 'Country', 'Total_Athletes', 'Individual_Medalists', 'Total_Medals_Awarded']
-        ]
+        merge_cols = ['Year', 'Country', 'Total_Athletes',
+                      'Individual_Medalists', 'Gold_Medalists', 'Silver_Medalists', 'Bronze_Medalists',
+                      'Total_Medals_Awarded', 'Gold_Awarded', 'Silver_Awarded', 'Bronze_Awarded']
+        season_counts = athlete_counts[athlete_counts['Season'] == season][merge_cols]
         
         # Merge on Country + Year
         df = df.merge(season_counts, on=['Year', 'Country'], how='left')

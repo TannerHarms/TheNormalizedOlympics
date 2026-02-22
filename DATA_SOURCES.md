@@ -14,16 +14,19 @@ All data sources used in the Olympic normalization analysis, with provenance, UR
 - **Accessed**: February 2026
 - **Processing**: Deduplicated to count one medal per event (team events counted once, not per athlete)
 
-### Wikipedia Medal Tables (2018–2024)
-- **Source**: Wikipedia medal count tables
-- **URLs**:
-  - [2018 Winter Olympics](https://en.wikipedia.org/wiki/2018_Winter_Olympics_medal_table)
-  - [2020 Summer Olympics](https://en.wikipedia.org/wiki/2020_Summer_Olympics_medal_table)
-  - [2022 Winter Olympics](https://en.wikipedia.org/wiki/2022_Winter_Olympics_medal_table)
-  - [2024 Summer Olympics](https://en.wikipedia.org/wiki/2024_Summer_Olympics_medal_table)
-- **License**: Creative Commons
+### Olympedia (2018–2026)
+- **Source**: [Olympedia.org](https://www.olympedia.org/) — comprehensive Olympic encyclopedia
+- **Coverage**: 2018 Winter (PyeongChang), 2020 Summer (Tokyo), 2022 Winter (Beijing), 2024 Summer (Paris), 2026 Winter (Milano-Cortina)
+- **Method**: Direct scrape of per-country results pages (`/countries/{NOC}/editions/{id}`)
+- **Validation**: Medal tallies cross-checked against Olympedia's official edition medal tables
+- **Script**: `scripts/scrape_olympedia.py` with HTTP caching (`data/olympedia_cache/`)
+- **License**: Data scraped for research/analysis purposes
 - **Accessed**: February 2026
-- **Processing**: Scraped with BeautifulSoup4, cleaned Unicode artifacts and footnotes
+- **Metrics extracted per country**:
+  - Total athletes sent
+  - Individual medalists (unique athletes winning ≥1 medal)
+  - Event-level medals (Gold, Silver, Bronze, Total — deduplicated for team events)
+  - Athlete-level medals awarded (Gold_Awarded, Silver_Awarded, Bronze_Awarded, Total_Medals_Awarded)
 
 ---
 
@@ -223,7 +226,7 @@ All data sources used in the Olympic normalization analysis, with provenance, UR
 
 **Olympic Medal Data:**
 - Griffin, R. (2018). 120 years of Olympic history. Kaggle. https://www.kaggle.com/heesoo37/120-years-of-olympic-history-athletes-and-results
-- Wikipedia Contributors. (2026). Olympic medal tables. Wikipedia.
+- Olympedia.org. (2026). Olympic results database. https://www.olympedia.org/ (direct scrape of 2018–2026 editions)
 
 **Economic Data:**
 - World Bank. (2024). World Development Indicators. https://data.worldbank.org/
@@ -245,4 +248,4 @@ All data sources used in the Olympic normalization analysis, with provenance, UR
 
 ---
 
-*Last Updated: February 8, 2026*
+*Last Updated: February 10, 2026*

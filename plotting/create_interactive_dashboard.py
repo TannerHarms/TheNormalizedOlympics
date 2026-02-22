@@ -151,9 +151,12 @@ def filter_and_prepare_data(df, medal_col, metric_col, start_year, end_year):
         np.isfinite(df_filtered[plot_col])
     ]
     # For most metrics, also remove zeros; but for Total_Athletes baseline,
-    # keep zero-medal nations so delegation sizes are properly represented
+    # keep zero-medal nations so delegation sizes are properly represented.
+    # Always exclude rows where Total_Athletes == 0 (country not participating).
     if not (medal_col == 'Total_Athletes' and metric_col == medal_col):
         df_filtered = df_filtered[df_filtered[plot_col] != 0]
+    else:
+        df_filtered = df_filtered[df_filtered['Total_Athletes'] > 0]
     
     # Apply quality filters for non-baseline normalized metrics
     if metric_col != medal_col and medal_col != 'Total_Athletes':
@@ -383,7 +386,14 @@ def _compute_bar_data_for_year(df_filtered, plot_col, medal_col, year, top_n=10)
             (recent_df.loc[has_medals, 'Gold'] / recent_df.loc[has_medals, 'Total']) * metric_vals[has_medals]
         )
     
-    recent_sorted = recent_df.sort_values(plot_col, ascending=False)
+    # Sort by visual bar total (sum of stacked components) so displayed bars
+    # are monotonically decreasing.  This matters especially for Individual_Medalists
+    # where Gold+Silver+Bronze medalists > unique Individual_Medalists.
+    recent_df['_bar_total'] = (
+        recent_df['gold_norm'] + recent_df['silver_norm'] +
+        recent_df['bronze_norm'] + recent_df['no_medal_norm']
+    )
+    recent_sorted = recent_df.sort_values('_bar_total', ascending=False)
     top = recent_sorted.head(top_n)
     bottom = recent_sorted.tail(top_n)
     
@@ -1130,11 +1140,11 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
             return season + '|' + medalType + '|' + metricCol;
         }}
         
-        function makeStackedBarTraces(countries, bronze, silver, gold, nomedal, isAthlete, showLegend) {{
+        function makeStackedBarTraces(countries, bronze, silver, gold, nomedal, isAthlete, showLegend, isNormalized) {{
             var traces = [];
             var legendGroup = showLegend ? 'bars' : 'bars2';
             var barLine = TH().barOutline;
-            var mFmt = isAthlete ? '.2f' : '.0f';
+            var mFmt = isNormalized ? '.4g' : (isAthlete ? '.2f' : '.0f');
             if (isAthlete) {{
                 traces.push({{
                     x: countries, y: nomedal, type: 'bar', name: 'No Medal',
@@ -1508,9 +1518,10 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'] }};
                 
                 // ---- Top bars: Top Performers ----
+                var isNorm = document.getElementById('normalization').value !== 'baseline';
                 var topTraces = makeStackedBarTraces(
                     barData.top_countries, barData.top_bronze, barData.top_silver,
-                    barData.top_gold, barData.top_nomedal, data.is_athlete_type, false
+                    barData.top_gold, barData.top_nomedal, data.is_athlete_type, false, isNorm
                 );
                 var topLayout = {{
                     barmode: 'stack',
@@ -1542,7 +1553,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                 // ---- Bottom bars: Bottom Performers ----
                 var botTraces = makeStackedBarTraces(
                     barData.bottom_countries, barData.bottom_bronze, barData.bottom_silver,
-                    barData.bottom_gold, barData.bottom_nomedal, data.is_athlete_type, false
+                    barData.bottom_gold, barData.bottom_nomedal, data.is_athlete_type, false, isNorm
                 );
                 var botLayout = {{
                     barmode: 'stack',

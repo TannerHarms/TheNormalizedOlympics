@@ -33,7 +33,7 @@ NORM_TO_CONTEXT = {
     },
     'Medals_Per_HDI': {
         'raw_col': 'HDI', 'name': 'Human Development Index',
-        'source': 'UNDP Human Development Reports (1990-2021)', 'snapshot': False,
+        'source': 'UNDP Human Development Reports (1990-2023)', 'snapshot': False,
     },
     'Medals_Per_Billion_GDP': {
         'raw_col': 'GDP', 'name': 'GDP (USD)',
@@ -97,15 +97,11 @@ NORM_TO_CONTEXT = {
     },
     'Medals_Per_100_Work_Hours': {
         'raw_col': 'Avg_Work_Hours_Per_Year', 'name': 'Average Work Hours Per Year',
-        'source': 'OECD Statistics (2000-2023)', 'snapshot': True,
-    },
-    'Medals_Per_Peace_Index_Point': {
-        'raw_col': 'Global_Peace_Index_Score', 'name': 'Global Peace Index Score',
-        'source': 'Institute for Economics & Peace (2024)', 'snapshot': True,
+        'source': 'OECD Statistics (2000-2024)', 'snapshot': False,
     },
     'Medals_Per_Pct_Military_Spending': {
         'raw_col': 'Military_Expenditure_Pct_GDP', 'name': 'Military Expenditure (% of GDP)',
-        'source': 'World Bank / SIPRI (2000-2023)', 'snapshot': False,
+        'source': 'World Bank / SIPRI (2000-2024)', 'snapshot': False,
     },
     'Medals_Per_1000_Military_Personnel': {
         'raw_col': 'Active_Military_Personnel_Thousands', 'name': 'Active Military Personnel (thousands)',
@@ -113,7 +109,7 @@ NORM_TO_CONTEXT = {
     },
     'Medals_Per_Pct_Education_Spending': {
         'raw_col': 'Education_Spending_pct_GDP', 'name': 'Education Spending (% of GDP)',
-        'source': 'World Bank Open Data (1970-2023)', 'snapshot': False,
+        'source': 'World Bank Open Data (1970-2024)', 'snapshot': False,
     },
     'Per_Athlete_Sent': {
         'raw_col': 'Total_Athletes', 'name': 'Total Athletes Sent',
@@ -397,6 +393,16 @@ def _compute_bar_data_for_year(df_filtered, plot_col, medal_col, year, top_n=10)
     top = recent_sorted.head(top_n)
     bottom = recent_sorted.tail(top_n)
     
+    # All countries' breakdown for cross-year aggregation
+    all_country_data = {}
+    for _, row in recent_df.iterrows():
+        all_country_data[row['Country']] = [
+            round(float(row['bronze_norm']), 4),
+            round(float(row['silver_norm']), 4),
+            round(float(row['gold_norm']), 4),
+            round(float(row['no_medal_norm']), 4),
+        ]
+    
     return {
         'top_countries': top['Country'].tolist(),
         'top_bronze': [round(float(v), 4) for v in top['bronze_norm'].tolist()],
@@ -408,6 +414,7 @@ def _compute_bar_data_for_year(df_filtered, plot_col, medal_col, year, top_n=10)
         'bottom_silver': [round(float(v), 4) for v in bottom['silver_norm'].tolist()],
         'bottom_gold': [round(float(v), 4) for v in bottom['gold_norm'].tolist()],
         'bottom_nomedal': [round(float(v), 4) for v in bottom['no_medal_norm'].tolist()],
+        'all_country_data': all_country_data,
     }
 
 
@@ -430,10 +437,17 @@ def compute_plot_data(df, medal_col, metric_col, start_year, end_year):
     
     # Compute bar chart data for EVERY available year
     bar_data_by_year = {}
+    country_bars = {}  # {country: {year: [b,s,g,n]}} for cross-year aggregation
     for year in sorted(df_filtered['Year'].unique()):
         year_data = _compute_bar_data_for_year(df_filtered, plot_col, medal_col, int(year), TOP_N)
         if year_data:
+            # Extract all_country_data for aggregation, don't store in per-year JSON
+            acd = year_data.pop('all_country_data', {})
             bar_data_by_year[str(int(year))] = year_data
+            for country, vals in acd.items():
+                if country not in country_bars:
+                    country_bars[country] = {}
+                country_bars[country][str(int(year))] = vals
     
     # --- Trend qualification (matching plot_08 logic) ---
     if medal_col == 'Total_Athletes':
@@ -534,6 +548,7 @@ def compute_plot_data(df, medal_col, metric_col, start_year, end_year):
     return {
         'is_athlete_type': bool(is_athlete_type),
         'bar_data_by_year': bar_data_by_year,
+        'country_bars': country_bars,
         'top_trends': top_trend_data,
         'bottom_trends': bottom_trend_data,
         'all_country_trends': all_country_trends,
@@ -560,38 +575,29 @@ def precompute_all_data(summer_df, winter_df):
     # regardless of which medal type is selected. The norm_col IS the metric column.
     norm_metrics = [
         (None, 'Baseline', ''),
-        # Core normalization
-        ('Medals_Per_Million', 'per Capita', ' per Million People'),
-        ('Medals_Per_HDI', 'per HDI', ' per HDI Point'),
-        ('Medals_Per_Billion_GDP', 'per GDP', ' per Billion GDP (USD)'),
-        ('Medals_Per_GDP_Per_Capita', 'per GDP Per Capita', ' per $1000 GDP Per Capita'),
-        # Geographic
+        # Alphabetical by display label
+        ('Medals_Per_1000_Military_Personnel', 'per 1000 Military Personnel', ' per 1000 Military Personnel'),
         ('Medals_Per_1000_SqKm', 'per 1000 Sq Km', ' per 1000 Sq Km'),
+        ('Medals_Per_1000_Vehicles', 'per 1000 Vehicles', ' per 1000 Vehicles'),
+        ('Medals_Per_100_Work_Hours', 'per 100 Work Hours', ' per 100 Work Hours/Year'),
+        ('Per_Athlete_Sent', 'per Athlete Sent', ' per Athlete Sent'),
+        ('Medals_Per_Million', 'per Capita', ' per Million People'),
         ('Medals_Per_1000_Km_Coastline', 'per Coastline', ' per 1000 Km Coastline'),
         ('Medals_Per_100m_Elevation', 'per Elevation', ' per 100m Elevation'),
-        # Climate
-        ('Medals_Per_Degree_Temp', 'per Temperature', ' per Degree Celsius'),
-        ('Medals_Per_100_Sunshine_Days', 'per Sunshine', ' per 100 Sunshine Days'),
-        ('Medals_Per_100_Cm_Snowfall', 'per Snowfall', ' per 100 Cm Snowfall'),
-        # Infrastructure
+        ('Medals_Per_Billion_GDP', 'per GDP', ' per Billion GDP (USD)'),
+        ('Medals_Per_GDP_Per_Capita', 'per GDP Per Capita', ' per $1000 GDP Per Capita'),
+        ('Medals_Per_HDI', 'per HDI', ' per HDI Point'),
         ('Medals_Per_Million_Internet_Users', 'per Million Internet Users', ' per Million Internet Users'),
-        ('Medals_Per_1000_Vehicles', 'per 1000 Vehicles', ' per 1000 Vehicles'),
-        ('Medals_Per_University', 'per University', ' per University'),
-        ('Medals_Per_Stadium', 'per Sports Stadium', ' per Sports Stadium'),
-        ('Medals_Per_Ski_Resort', 'per Ski Resort', ' per Ski Resort'),
-        # Economic/Social
-        ('Medals_Per_Pct_Healthcare_Spending', 'per Pct Healthcare Spending', ' per Pct GDP Healthcare'),
-        ('Medals_Per_Year_Life_Expectancy', 'per Year Life Expectancy', ' per Year Life Expectancy'),
-        ('Medals_Per_100_Work_Hours', 'per 100 Work Hours', ' per 100 Work Hours/Year'),
-        # Cultural
-        ('Medals_Per_Peace_Index_Point', 'per Peace Index Point', ' per Peace Index Point'),
-        # Military
-        ('Medals_Per_Pct_Military_Spending', 'per Pct Military Spending', ' per Pct GDP Military'),
-        ('Medals_Per_1000_Military_Personnel', 'per 1000 Military Personnel', ' per 1000 Military Personnel'),
-        # Education
         ('Medals_Per_Pct_Education_Spending', 'per Pct Education Spending', ' per Pct GDP Education'),
-        # Per Athlete (special: column varies by medal type)
-        ('Per_Athlete_Sent', 'per Athlete Sent', ' per Athlete Sent'),
+        ('Medals_Per_Pct_Healthcare_Spending', 'per Pct Healthcare Spending', ' per Pct GDP Healthcare'),
+        ('Medals_Per_Pct_Military_Spending', 'per Pct Military Spending', ' per Pct GDP Military'),
+        ('Medals_Per_Ski_Resort', 'per Ski Resort', ' per Ski Resort'),
+        ('Medals_Per_100_Cm_Snowfall', 'per Snowfall', ' per 100 Cm Snowfall'),
+        ('Medals_Per_Stadium', 'per Sports Stadium', ' per Sports Stadium'),
+        ('Medals_Per_100_Sunshine_Days', 'per Sunshine', ' per 100 Sunshine Days'),
+        ('Medals_Per_Degree_Temp', 'per Temperature', ' per Degree Celsius'),
+        ('Medals_Per_University', 'per University', ' per University'),
+        ('Medals_Per_Year_Life_Expectancy', 'per Year Life Expectancy', ' per Year Life Expectancy'),
     ]
     
     all_data = {}
@@ -1113,6 +1119,16 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                 <input type="number" id="endYear" min="1896" max="2024" value="{max(summer_years)}" step="4">
             </div>
             <div class="control-group">
+                <label for="barMode">Bar Mode</label>
+                <select id="barMode">
+                    <option value="single">Single Year</option>
+                    <option value="sum">Sum</option>
+                    <option value="mean">Mean</option>
+                    <option value="max">Max</option>
+                    <option value="min">Min</option>
+                </select>
+            </div>
+            <div class="control-group" id="barYearGroup">
                 <label for="barYear">Bar Chart Year</label>
                 <select id="barYear"></select>
             </div>
@@ -1129,7 +1145,16 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
         <div class="trend-controls">
             <label for="trendCountrySelect">Highlight Nation:</label>
             <select id="trendCountrySelect"><option value="">\u2014 None \u2014</option></select>
-            <button id="toggleTopBottom" class="ctx-toggle" title="Toggle top/bottom performer lines">Hide Top/Bottom</button>
+            <label for="trendAggSelect" style="margin-left:12px;">Ranking:</label>
+            <select id="trendAggSelect">
+                <option value="median" selected>Median</option>
+                <option value="mean">Mean</option>
+                <option value="sum">Sum</option>
+                <option value="max">Max</option>
+                <option value="min">Min</option>
+            </select>
+            <button id="toggleTop" class="ctx-toggle" title="Toggle top performer lines">Hide Top</button>
+            <button id="toggleBottom" class="ctx-toggle" title="Toggle bottom performer lines">Hide Bottom</button>
         </div>
         
         <div id="contextSection" style="display:none;">
@@ -1168,12 +1193,12 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     <h3>Normalization Indicators (Time-Series)</h3>
                     <table>
                         <tr><th>Indicator</th><th>Source</th><th>Coverage</th></tr>
-                        <tr><td>Population, GDP, GDP per Capita</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank API</a> (CC-BY 4.0)</td><td>1960&ndash;2024, 125 countries</td></tr>
+                        <tr><td>Population, GDP, GDP per Capita</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank API</a> (CC-BY 4.0)</td><td>1960&ndash;2024, 203 countries</td></tr>
                         <tr><td>Internet Users, Vehicles/1000, Healthcare, Life Expectancy, Labor Force, Land/Surface Area</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank API</a></td><td>1960&ndash;2024 (varies)</td></tr>
-                        <tr><td>Human Development Index (HDI)</td><td><a href="https://hdr.undp.org/" target="_blank">UNDP HDR</a> (CC-BY 3.0 IGO)</td><td>1990&ndash;2023</td></tr>
-                        <tr><td>Military Expenditure &amp; Personnel</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank</a> (SIPRI/IISS)</td><td>2000&ndash;2023</td></tr>
-                        <tr><td>Average Work Hours</td><td><a href="https://data-explorer.oecd.org/" target="_blank">OECD SDMX API</a></td><td>2000&ndash;2023, 45 countries</td></tr>
-                        <tr><td>Education Spending (% GDP)</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank</a></td><td>1970&ndash;2023 (sparse)</td></tr>
+                        <tr><td>Human Development Index (HDI)</td><td><a href="https://hdr.undp.org/" target="_blank">UNDP HDR</a> (CC-BY 3.0 IGO)</td><td>1990&ndash;2023, 204 countries</td></tr>
+                        <tr><td>Military Expenditure &amp; Personnel</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank</a> (SIPRI/IISS)</td><td>2000&ndash;2024, 173 countries</td></tr>
+                        <tr><td>Average Work Hours</td><td><a href="https://data-explorer.oecd.org/" target="_blank">OECD SDMX API</a></td><td>2000&ndash;2024, 45 countries</td></tr>
+                        <tr><td>Education Spending (% GDP)</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank</a></td><td>1970&ndash;2024, 198 countries (sparse)</td></tr>
                     </table>
 
                     <h3>Normalization Indicators (Static/Snapshot)</h3>
@@ -1182,22 +1207,24 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                         <tr><td>Coastline Length, Average Elevation</td><td>CIA World Factbook, Wikipedia</td><td>85 countries</td></tr>
                         <tr><td>Avg Temperature, Snowfall, Sunshine Days</td><td>World Bank Climate Portal</td><td>53 countries; national averages</td></tr>
                         <tr><td>Universities, Ski Resorts, Stadiums</td><td>UNESCO, manual compilation</td><td>54 countries; 2024 snapshot</td></tr>
-                        <tr><td>Global Peace Index</td><td><a href="https://www.visionofhumanity.org/" target="_blank">IEP</a></td><td>GPI 2024; 47 countries</td></tr>
-                        <tr><td>Refugees Received/Produced</td><td><a href="https://www.unhcr.org/refugee-statistics/" target="_blank">UNHCR</a></td><td>2023 snapshot; 66 countries</td></tr>
+
                     </table>
 
                     <h3>Methodology</h3>
                     <ul>
                         <li><strong>Year matching:</strong> Each Olympic edition is matched to the nearest available year for each country and indicator. For example, 2026 Winter Olympics uses 2024 population data where 2026 is unavailable.</li>
                         <li><strong>Normalization formula:</strong> Medals (or athletes) divided by the selected denominator. For per-capita metrics, results are scaled for readability (e.g., medals per million people).</li>
-                        <li><strong>Historical countries:</strong> Soviet Union, Yugoslavia, etc. are mapped to modern successor states using contemporary economic data.</li>
+                        <li><strong>Dissolved/historical nations:</strong> The Soviet Union (URS, 1952&ndash;1988), Yugoslavia (YUG, 1920&ndash;1992), Czechoslovakia (TCH, 1920&ndash;1992), Unified Team (EUN, 1992), and Serbia &amp; Montenegro (SCG, 1996&ndash;2006) are included in baseline (raw medal count) views with their original Olympic identities. They appear in trend lines, bar charts, and context plots. Because no modern economic or demographic data exists for these dissolved states, they have no normalization metrics&mdash;they will not appear in any normalized view (e.g., per Capita, per GDP).</li>
+                        <li><strong>Germany:</strong> East Germany (GDR, 1968&ndash;1988), West Germany (FRG, 1968&ndash;1988), and United Team of Germany (EUA, 1956&ndash;1964) are mapped to modern Germany (DEU) for normalization purposes and receive contemporary German economic data.</li>
+                        <li><strong>Russia:</strong> The Russian Olympic Committee (ROC, 2020&ndash;2022) and Olympic Athletes from Russia (OAR, 2018) are mapped to Russia (RUS).</li>
                         <li><strong>Coverage gaps:</strong> Smaller nations often lack data for niche metrics. Coverage ranges from ~24% (ski resorts) to ~99% (population).</li>
                         <li><strong>GDP is in current US dollars,</strong> not PPP or inflation-adjusted.</li>
                     </ul>
 
                     <h3>Data Limitations</h3>
                     <ul>
-                        <li>Snapshot metrics (refugees, peace index, consumption) are applied uniformly across all Olympic years.</li>
+                        <li>Dissolved nations (URS, YUG, TCH, EUN, SCG) have no economic data and are excluded from all normalized views. They appear only in baseline medal counts.</li>
+                        <li>Snapshot metrics (coastline, elevation, climate, universities, ski resorts, stadiums) are applied uniformly across all Olympic years.</li>
                         <li>OECD work-hours data covers only 45 member/partner countries; no data for China, India, or most African nations.</li>
                         <li>Climate and geographic values are national approximations; large countries have wide regional variation.</li>
                         <li>Vehicles per 1000 has very sparse coverage (~2% for recent years).</li>
@@ -1241,6 +1268,70 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
         var MEDAL_COLORS = {{
             Bronze: '#CD7F32', Silver: '#C0C0C0', Gold: '#FFD700', NoMedal: '#36454F'
         }};
+        
+        function aggregateBarData(countryBars, years, mode) {{
+            var agg = {{}};
+            for (var country in countryBars) {{
+                var entries = [];
+                for (var i = 0; i < years.length; i++) {{
+                    var yr = String(years[i]);
+                    if (countryBars[country][yr]) {{
+                        entries.push(countryBars[country][yr]);
+                    }}
+                }}
+                if (entries.length === 0) continue;
+                var b, s, g, n;
+                if (mode === 'sum') {{
+                    b = s = g = n = 0;
+                    for (var j = 0; j < entries.length; j++) {{
+                        b += entries[j][0]; s += entries[j][1]; g += entries[j][2]; n += entries[j][3];
+                    }}
+                }} else if (mode === 'mean') {{
+                    b = s = g = n = 0;
+                    for (var j = 0; j < entries.length; j++) {{
+                        b += entries[j][0]; s += entries[j][1]; g += entries[j][2]; n += entries[j][3];
+                    }}
+                    b /= entries.length; s /= entries.length; g /= entries.length; n /= entries.length;
+                }} else if (mode === 'max') {{
+                    var best = -Infinity, bi = 0;
+                    for (var j = 0; j < entries.length; j++) {{
+                        var t = entries[j][0] + entries[j][1] + entries[j][2] + entries[j][3];
+                        if (t > best) {{ best = t; bi = j; }}
+                    }}
+                    b = entries[bi][0]; s = entries[bi][1]; g = entries[bi][2]; n = entries[bi][3];
+                }} else if (mode === 'min') {{
+                    var best = Infinity, bi = 0;
+                    for (var j = 0; j < entries.length; j++) {{
+                        var t = entries[j][0] + entries[j][1] + entries[j][2] + entries[j][3];
+                        if (t < best) {{ best = t; bi = j; }}
+                    }}
+                    b = entries[bi][0]; s = entries[bi][1]; g = entries[bi][2]; n = entries[bi][3];
+                }}
+                agg[country] = [b, s, g, n];
+            }}
+            // Sort by total descending
+            var sorted = [];
+            for (var c in agg) sorted.push([c, agg[c]]);
+            sorted.sort(function(a, b) {{
+                var tA = a[1][0] + a[1][1] + a[1][2] + a[1][3];
+                var tB = b[1][0] + b[1][1] + b[1][2] + b[1][3];
+                return tB - tA;
+            }});
+            var top = sorted.slice(0, 10);
+            var bottom = sorted.slice(Math.max(sorted.length - 10, 10));
+            return {{
+                top_countries: top.map(function(x){{ return x[0]; }}),
+                top_bronze: top.map(function(x){{ return x[1][0]; }}),
+                top_silver: top.map(function(x){{ return x[1][1]; }}),
+                top_gold: top.map(function(x){{ return x[1][2]; }}),
+                top_nomedal: top.map(function(x){{ return x[1][3]; }}),
+                bottom_countries: bottom.map(function(x){{ return x[0]; }}),
+                bottom_bronze: bottom.map(function(x){{ return x[1][0]; }}),
+                bottom_silver: bottom.map(function(x){{ return x[1][1]; }}),
+                bottom_gold: bottom.map(function(x){{ return x[1][2]; }}),
+                bottom_nomedal: bottom.map(function(x){{ return x[1][3]; }}),
+            }};
+        }}
         
         function showError(msg) {{
             var box = document.getElementById('errorBox');
@@ -1326,8 +1417,62 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
         var _trendData = null;
         var _trendStartYear = 0;
         var _trendEndYear = 9999;
-        var _hideTopBottom = false;
+        var _hideTop = false;
+        var _hideBottom = false;
         var _trendPlotConfig = null;
+
+        function _aggFn(vals, method) {{
+            if (!vals || vals.length === 0) return 0;
+            if (method === 'sum') return vals.reduce(function(a,b){{ return a+b; }}, 0);
+            if (method === 'min') return Math.min.apply(null, vals);
+            if (method === 'max') return Math.max.apply(null, vals);
+            if (method === 'mean') return vals.reduce(function(a,b){{ return a+b; }}, 0) / vals.length;
+            // median (default)
+            var s = vals.slice().sort(function(a,b){{ return a-b; }});
+            var mid = Math.floor(s.length / 2);
+            return s.length % 2 !== 0 ? s[mid] : (s[mid-1] + s[mid]) / 2;
+        }}
+
+        function _computeDynamicTopBottom(data, startYear, endYear, aggMethod) {{
+            var N = 6;
+            var red_palette = ['#67000d', '#a50f15', '#cb181d', '#ef3b2c', '#fb6a4a', '#fc9272'];
+            var blue_palette = ['#08306b', '#08519c', '#2171b5', '#4292c6', '#6baed6', '#9ecae1'];
+            var red_palette_dark = ['#ffb3b3', '#ff8080', '#ff4d4d', '#e02020', '#b31010', '#800a0a'];
+            var blue_palette_dark = ['#b3d4ff', '#80b8ff', '#4d9cff', '#2080e0', '#1060b3', '#0a4080'];
+            if (!data.all_country_trends) return {{ top: [], bottom: [] }};
+            // Compute agg value for each country within year range
+            var scored = [];
+            for (var i = 0; i < data.all_country_trends.length; i++) {{
+                var ct = data.all_country_trends[i];
+                var rangeVals = [];
+                for (var j = 0; j < ct.years.length; j++) {{
+                    if (ct.years[j] >= startYear && ct.years[j] <= endYear) {{
+                        rangeVals.push(ct.values[j]);
+                    }}
+                }}
+                if (rangeVals.length === 0) continue;
+                scored.push({{ country: ct.country, agg: _aggFn(rangeVals, aggMethod), years: ct.years, values: ct.values }});
+            }}
+            scored.sort(function(a,b){{ return b.agg - a.agg; }});
+            var topList = scored.slice(0, N);
+            var bottomList = scored.slice(-N).reverse(); // lowest first
+            bottomList.sort(function(a,b){{ return a.agg - b.agg; }});
+            function makeEntries(list, palette, paletteDark) {{
+                var out = [];
+                for (var k = 0; k < list.length; k++) {{
+                    out.push({{
+                        country: list[k].country,
+                        median: list[k].agg,
+                        years: list[k].years,
+                        values: list[k].values,
+                        color: palette[k] || palette[palette.length-1],
+                        color_dark: paletteDark[k] || paletteDark[paletteDark.length-1]
+                    }});
+                }}
+                return out;
+            }}
+            return {{ top: makeEntries(topList, red_palette, red_palette_dark), bottom: makeEntries(bottomList, blue_palette, blue_palette_dark) }};
+        }}
         
         function renderTrendPlot() {{
             var data = _trendData;
@@ -1339,13 +1484,16 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
             var plotConfig = _trendPlotConfig || {{ displayModeBar: true, displaylogo: false, responsive: true,
                 modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'] }};
             
+            var aggMethod = document.getElementById('trendAggSelect').value;
+            var aggLabel = aggMethod.charAt(0).toUpperCase() + aggMethod.slice(1);
+            var dynamic = _computeDynamicTopBottom(data, startYear, endYear, aggMethod);
             var trendTraces = [];
             var numTopBottom = 0;
             
-            if (!_hideTopBottom) {{
+            if (!_hideTop) {{
                 // Top performers (Reds, circle markers, solid lines) - left y-axis
-                for (var ti = 0; ti < data.top_trends.length; ti++) {{
-                    var ct = data.top_trends[ti];
+                for (var ti = 0; ti < dynamic.top.length; ti++) {{
+                    var ct = dynamic.top[ti];
                     var tColor = _dark ? ct.color_dark : ct.color;
                     var tx = [], ty = [];
                     for (var j = 0; j < ct.years.length; j++) {{
@@ -1358,16 +1506,18 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                         x: tx, y: ty, type: 'scatter', mode: 'lines+markers',
                         name: ct.country + ': ' + ct.median.toFixed(3),
                         legendgroup: 'top',
-                        legendgrouptitle: (ti === 0) ? {{ text: 'Top Performers', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
+                        legendgrouptitle: (ti === 0) ? {{ text: 'Top Performers (' + aggLabel + ')', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
                         marker: {{ symbol: 'circle', size: 8, color: tColor }},
                         line: {{ color: tColor, width: 2.5, dash: 'solid' }},
-                        hovertemplate: '<b>' + ct.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + ct.median.toFixed(3) + '<extra></extra>'
+                        hovertemplate: '<b>' + ct.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>' + aggLabel + ': ' + ct.median.toFixed(3) + '<extra></extra>'
                     }});
                 }}
-                
+            }}
+            
+            if (!_hideBottom) {{
                 // Bottom performers (Blues, square markers, dashed lines) - right y-axis
-                for (var b = 0; b < data.bottom_trends.length; b++) {{
-                    var cb = data.bottom_trends[b];
+                for (var b = 0; b < dynamic.bottom.length; b++) {{
+                    var cb = dynamic.bottom[b];
                     var bColor = _dark ? cb.color_dark : cb.color;
                     var bx = [], by = [];
                     for (var k = 0; k < cb.years.length; k++) {{
@@ -1381,14 +1531,14 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                         type: 'scatter', mode: 'lines+markers',
                         name: cb.country + ': ' + cb.median.toFixed(3),
                         legendgroup: 'bottom',
-                        legendgrouptitle: (b === 0) ? {{ text: 'Bottom Performers', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
+                        legendgrouptitle: (b === 0) ? {{ text: 'Bottom Performers (' + aggLabel + ')', font: {{ size: 14, family: FONT().family, color: t.annotation }} }} : undefined,
                         marker: {{ symbol: 'square', size: 8, color: bColor }},
                         line: {{ color: bColor, width: 2.5, dash: 'dash' }},
-                        hovertemplate: '<b>' + cb.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + cb.median.toFixed(3) + '<extra></extra>'
+                        hovertemplate: '<b>' + cb.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>' + aggLabel + ': ' + cb.median.toFixed(3) + '<extra></extra>'
                     }});
                 }}
-                numTopBottom = trendTraces.length;
             }}
+            numTopBottom = trendTraces.length;
             
             // Selected country from dropdown (green line)
             var selectedCountry = document.getElementById('trendCountrySelect').value;
@@ -1406,15 +1556,16 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                         }}
                         if (sx.length > 0) {{
                             selectedTraceIdx = trendTraces.length;
+                            var scAgg = _aggFn(sy, aggMethod);
                             var greenColor = _dark ? '#44ff88' : '#118833';
                             trendTraces.push({{
                                 x: sx, y: sy, type: 'scatter', mode: 'lines+markers',
-                                name: scData.country + ': ' + scData.median.toFixed(3),
+                                name: scData.country + ': ' + scAgg.toFixed(3),
                                 legendgroup: 'selected',
                                 legendgrouptitle: {{ text: 'Selected Nation', font: {{ size: 14, family: FONT().family, color: t.annotation }} }},
                                 marker: {{ symbol: 'diamond', size: 10, color: greenColor }},
                                 line: {{ color: greenColor, width: 3.5, dash: 'solid' }},
-                                hovertemplate: '<b>' + scData.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>Median: ' + scData.median.toFixed(3) + '<extra></extra>'
+                                hovertemplate: '<b>' + scData.country + '</b><br>Year: %{{x}}<br>Value: %{{y:.3f}}<br>' + aggLabel + ': ' + scAgg.toFixed(3) + '<extra></extra>'
                             }});
                         }}
                         break;
@@ -1608,29 +1759,43 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                 document.getElementById('suptitle').textContent = 
                     document.getElementById('season').value + ' Olympics ' + data.display_name;
                 
-                // Populate bar year dropdown from available years with bar data
+                // --- Bar mode: Single Year vs Aggregation ---
+                var barMode = document.getElementById('barMode').value;
+                var barYearGroup = document.getElementById('barYearGroup');
                 var barYearSelect = document.getElementById('barYear');
-                var availableBarYears = Object.keys(data.bar_data_by_year).map(Number).sort(function(a,b){{ return a-b; }});
-                var prevBarYear = barYearSelect.value ? parseInt(barYearSelect.value) : null;
-                barYearSelect.innerHTML = '';
-                for (var by = 0; by < availableBarYears.length; by++) {{
-                    var opt = document.createElement('option');
-                    opt.value = String(availableBarYears[by]);
-                    opt.textContent = String(availableBarYears[by]);
-                    barYearSelect.appendChild(opt);
-                }}
-                // Default to previous selection if still valid, else most recent
-                if (prevBarYear && data.bar_data_by_year[String(prevBarYear)]) {{
-                    barYearSelect.value = String(prevBarYear);
-                }} else {{
-                    barYearSelect.value = String(data.most_recent_year);
-                }}
-                var selectedBarYear = barYearSelect.value;
-                var barData = data.bar_data_by_year[selectedBarYear];
+                var barData, barLabel;
                 
-                if (!barData) {{
-                    showError('No bar chart data for year ' + selectedBarYear);
-                    return;
+                if (barMode === 'single') {{
+                    barYearGroup.style.display = '';
+                    // Populate bar year dropdown from available years with bar data
+                    var availableBarYears = Object.keys(data.bar_data_by_year).map(Number).sort(function(a,b){{ return a-b; }});
+                    var prevBarYear = barYearSelect.value ? parseInt(barYearSelect.value) : null;
+                    barYearSelect.innerHTML = '';
+                    for (var by = 0; by < availableBarYears.length; by++) {{
+                        var opt = document.createElement('option');
+                        opt.value = String(availableBarYears[by]);
+                        opt.textContent = String(availableBarYears[by]);
+                        barYearSelect.appendChild(opt);
+                    }}
+                    if (prevBarYear && data.bar_data_by_year[String(prevBarYear)]) {{
+                        barYearSelect.value = String(prevBarYear);
+                    }} else {{
+                        barYearSelect.value = String(data.most_recent_year);
+                    }}
+                    var selectedBarYear = barYearSelect.value;
+                    barData = data.bar_data_by_year[selectedBarYear];
+                    barLabel = selectedBarYear;
+                    
+                    if (!barData) {{
+                        showError('No bar chart data for year ' + selectedBarYear);
+                        return;
+                    }}
+                }} else {{
+                    barYearGroup.style.display = 'none';
+                    barData = aggregateBarData(data.country_bars, years, barMode);
+                    var modeLabels = {{ sum: 'Sum', mean: 'Mean', max: 'Max', min: 'Min' }};
+                    barLabel = modeLabels[barMode] + ' (' + Math.min.apply(null, years) + '\u2013' + Math.max.apply(null, years) + ')';
+                    var selectedBarYear = String(data.most_recent_year);
                 }}
                 
                 var plotConfig = {{ displayModeBar: true, displaylogo: false, responsive: true,
@@ -1660,7 +1825,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     }}, GRID_STYLE()),
                     showlegend: false,
                     annotations: [{{
-                        text: '<b>Top Performers ' + selectedBarYear + '</b>',
+                        text: '<b>Top Performers ' + barLabel + '</b>',
                         xref: 'paper', yref: 'paper', x: 0.98, y: 0.98,
                         showarrow: false, xanchor: 'right', yanchor: 'top',
                         font: {{ size: 24, family: FONT().family, color: t.annotation }}
@@ -1692,7 +1857,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     }}, GRID_STYLE()),
                     showlegend: false,
                     annotations: [{{
-                        text: '<b>Bottom Performers ' + selectedBarYear + '</b>',
+                        text: '<b>Bottom Performers ' + barLabel + '</b>',
                         xref: 'paper', yref: 'paper', x: 0.98, y: 0.98,
                         showarrow: false, xanchor: 'right', yanchor: 'top',
                         font: {{ size: 24, family: FONT().family, color: t.annotation }}
@@ -1730,10 +1895,12 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                 }}
                 
                 // Update toggle button text
-                var togBtn = document.getElementById('toggleTopBottom');
-                togBtn.textContent = _hideTopBottom ? 'Show Top/Bottom' : 'Hide Top/Bottom';
-                if (_hideTopBottom) togBtn.classList.add('active');
-                else togBtn.classList.remove('active');
+                var togTop = document.getElementById('toggleTop');
+                togTop.textContent = _hideTop ? 'Show Top' : 'Hide Top';
+                if (_hideTop) togTop.classList.add('active'); else togTop.classList.remove('active');
+                var togBot = document.getElementById('toggleBottom');
+                togBot.textContent = _hideBottom ? 'Show Bottom' : 'Hide Bottom';
+                if (_hideBottom) togBot.classList.add('active'); else togBot.classList.remove('active');
                 
                 renderTrendPlot();
                 
@@ -1767,21 +1934,72 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     var isStacked = false;
                     var nTotal = 0;
                     
+                    // Determine context aggregation label matching barMode
+                    var ctxIsAgg = (barMode !== 'single');
+                    var ctxModeLabels = {{ sum: 'Sum', mean: 'Mean', max: 'Max', min: 'Min' }};
+                    var ctxYearLabel = ctxIsAgg
+                        ? ctxModeLabels[barMode] + ' (' + Math.min.apply(null, years) + '\u2013' + Math.max.apply(null, years) + ')'
+                        : ctxYear;
+                    
                     if (ctx.type === 'baseline') {{
                         isStacked = true;
                         var countries = [], golds = [], silvers = [], bronzes = [];
                         var nomedals = [], totals = [];
                         
-                        for (var country in ctx.data) {{
-                            var cd = ctx.data[country];
-                            if (cd[ctxYear]) {{
-                                var d = cd[ctxYear]; // [g, s, b, n, t]
+                        if (ctxIsAgg) {{
+                            // Aggregate baseline context across years
+                            for (var country in ctx.data) {{
+                                var cd = ctx.data[country];
+                                var entries = [];
+                                for (var yi = 0; yi < years.length; yi++) {{
+                                    var yr = String(years[yi]);
+                                    if (cd[yr]) entries.push(cd[yr]);
+                                }}
+                                if (entries.length === 0) continue;
+                                var ag, as, ab, an, at;
+                                if (barMode === 'sum') {{
+                                    ag = as = ab = an = at = 0;
+                                    for (var j = 0; j < entries.length; j++) {{
+                                        ag += entries[j][0]; as += entries[j][1];
+                                        ab += entries[j][2]; an += entries[j][3]; at += entries[j][4];
+                                    }}
+                                }} else if (barMode === 'mean') {{
+                                    ag = as = ab = an = at = 0;
+                                    for (var j = 0; j < entries.length; j++) {{
+                                        ag += entries[j][0]; as += entries[j][1];
+                                        ab += entries[j][2]; an += entries[j][3]; at += entries[j][4];
+                                    }}
+                                    ag /= entries.length; as /= entries.length;
+                                    ab /= entries.length; an /= entries.length; at /= entries.length;
+                                }} else if (barMode === 'max') {{
+                                    var best = -Infinity, bi = 0;
+                                    for (var j = 0; j < entries.length; j++) {{
+                                        if (entries[j][4] > best) {{ best = entries[j][4]; bi = j; }}
+                                    }}
+                                    ag = entries[bi][0]; as = entries[bi][1];
+                                    ab = entries[bi][2]; an = entries[bi][3]; at = entries[bi][4];
+                                }} else if (barMode === 'min') {{
+                                    var best = Infinity, bi = 0;
+                                    for (var j = 0; j < entries.length; j++) {{
+                                        if (entries[j][4] < best) {{ best = entries[j][4]; bi = j; }}
+                                    }}
+                                    ag = entries[bi][0]; as = entries[bi][1];
+                                    ab = entries[bi][2]; an = entries[bi][3]; at = entries[bi][4];
+                                }}
                                 countries.push(country);
-                                golds.push(d[0]);
-                                silvers.push(d[1]);
-                                bronzes.push(d[2]);
-                                nomedals.push(d[3]);
-                                totals.push(d[4]);
+                                golds.push(ag); silvers.push(as);
+                                bronzes.push(ab); nomedals.push(an); totals.push(at);
+                            }}
+                        }} else {{
+                            // Single year
+                            for (var country in ctx.data) {{
+                                var cd = ctx.data[country];
+                                if (cd[ctxYear]) {{
+                                    var d = cd[ctxYear]; // [g, s, b, n, t]
+                                    countries.push(country);
+                                    golds.push(d[0]); silvers.push(d[1]);
+                                    bronzes.push(d[2]); nomedals.push(d[3]); totals.push(d[4]);
+                                }}
                             }}
                         }}
                         
@@ -1809,7 +2027,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                                 legendgroup: 'ctx', showlegend: true
                             }});
                         }}
-                        var hFmt = ctx.is_athlete_type ? '.2f' : '.0f';
+                        var hFmt = (ctx.is_athlete_type || ctxIsAgg) ? '.2f' : '.0f';
                         ctxTraces.push({{
                             x: sC, y: sB, type: 'bar', name: 'Bronze',
                             marker: {{ color: MEDAL_COLORS.Bronze, line: {{ color: t.barOutline, width: 0.8 }} }},
@@ -1829,19 +2047,50 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                             legendgroup: 'ctx', showlegend: true
                         }});
                         
-                        ctxTitle = data.display_name + ' \u2014 Ranks ' + rankFrom + '\u2013' + Math.min(rankTo, nTotal) + ' of ' + nTotal + ' (' + ctxYear + ')';
+                        ctxTitle = data.display_name + ' \u2014 Ranks ' + rankFrom + '\u2013' + Math.min(rankTo, nTotal) + ' of ' + nTotal + ' (' + ctxYearLabel + ')';
                         yAxisTitle = data.display_name;
-                        ctxSource = 'Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026). Year shown: ' + ctxYear + '.';
+                        ctxSource = 'Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026). ' + (ctxIsAgg ? 'Aggregation: ' + ctxYearLabel : 'Year shown: ' + ctxYear) + '.';
                         
                     }} else {{
                         // Normalization context: earth-tone bars for raw metric
                         var countries = [], values = [];
                         
-                        for (var country in ctx.data) {{
-                            var cd = ctx.data[country];
-                            if (cd[ctxYear] !== undefined) {{
+                        if (ctxIsAgg) {{
+                            // Aggregate normalization context across years
+                            for (var country in ctx.data) {{
+                                var cd = ctx.data[country];
+                                var vals = [];
+                                for (var yi = 0; yi < years.length; yi++) {{
+                                    var yr = String(years[yi]);
+                                    if (cd[yr] !== undefined) vals.push(cd[yr]);
+                                }}
+                                if (vals.length === 0) continue;
+                                var aval;
+                                if (barMode === 'sum') {{
+                                    aval = 0;
+                                    for (var j = 0; j < vals.length; j++) aval += vals[j];
+                                }} else if (barMode === 'mean') {{
+                                    aval = 0;
+                                    for (var j = 0; j < vals.length; j++) aval += vals[j];
+                                    aval /= vals.length;
+                                }} else if (barMode === 'max') {{
+                                    aval = -Infinity;
+                                    for (var j = 0; j < vals.length; j++) if (vals[j] > aval) aval = vals[j];
+                                }} else if (barMode === 'min') {{
+                                    aval = Infinity;
+                                    for (var j = 0; j < vals.length; j++) if (vals[j] < aval) aval = vals[j];
+                                }}
                                 countries.push(country);
-                                values.push(cd[ctxYear]);
+                                values.push(aval);
+                            }}
+                        }} else {{
+                            // Single year
+                            for (var country in ctx.data) {{
+                                var cd = ctx.data[country];
+                                if (cd[ctxYear] !== undefined) {{
+                                    countries.push(country);
+                                    values.push(cd[ctxYear]);
+                                }}
                             }}
                         }}
                         
@@ -1871,9 +2120,9 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                             showlegend: false
                         }});
                         
-                        ctxTitle = ctx.title + ' \u2014 Ranks ' + rankFrom + '\u2013' + Math.min(rankTo, nTotal) + ' of ' + nTotal + ' (' + ctxYear + ')';
+                        ctxTitle = ctx.title + ' \u2014 Ranks ' + rankFrom + '\u2013' + Math.min(rankTo, nTotal) + ' of ' + nTotal + ' (' + ctxYearLabel + ')';
                         yAxisTitle = ctx.title;
-                        ctxSource = ctx.source + '. Year shown: ' + ctxYear + '.';
+                        ctxSource = ctx.source + '. ' + (ctxIsAgg ? 'Aggregation: ' + ctxYearLabel : 'Year shown: ' + ctxYear) + '.';
                     }}
                     
                     document.getElementById('contextTitle').textContent = ctxTitle;
@@ -1929,7 +2178,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
                     'Trend values show median. Coverage: ' + data.countries_with_data + '/' + 
                     data.total_olympic_countries + ' participating nations in range (' + 
                     minY + '-' + maxY + ') (' + data.coverage_pct + '%). ' +
-                    'Bar charts show top/bottom 10 from ' + selectedBarYear + '.';
+                    'Bar charts show top/bottom 10: ' + barLabel + '.';
                 document.getElementById('sourceText').textContent = 
                     'Olympic Medals: Kaggle (1896-2016) & Olympedia.org (2018-2026).';
                     
@@ -1962,6 +2211,7 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
         document.getElementById('startYear').addEventListener('change', updatePlot);
         document.getElementById('endYear').addEventListener('change', updatePlot);
         document.getElementById('barYear').addEventListener('change', updatePlot);
+        document.getElementById('barMode').addEventListener('change', updatePlot);
         document.getElementById('ctxLogToggle').addEventListener('click', function() {{
             this.classList.toggle('active');
             this.dataset.userSet = '1';
@@ -1973,11 +2223,19 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
         document.getElementById('trendCountrySelect').addEventListener('change', function() {{
             renderTrendPlot();
         }});
-        document.getElementById('toggleTopBottom').addEventListener('click', function() {{
-            _hideTopBottom = !_hideTopBottom;
-            this.textContent = _hideTopBottom ? 'Show Top/Bottom' : 'Hide Top/Bottom';
-            if (_hideTopBottom) this.classList.add('active');
-            else this.classList.remove('active');
+        document.getElementById('toggleTop').addEventListener('click', function() {{
+            _hideTop = !_hideTop;
+            this.textContent = _hideTop ? 'Show Top' : 'Hide Top';
+            if (_hideTop) this.classList.add('active'); else this.classList.remove('active');
+            renderTrendPlot();
+        }});
+        document.getElementById('toggleBottom').addEventListener('click', function() {{
+            _hideBottom = !_hideBottom;
+            this.textContent = _hideBottom ? 'Show Bottom' : 'Hide Bottom';
+            if (_hideBottom) this.classList.add('active'); else this.classList.remove('active');
+            renderTrendPlot();
+        }});
+        document.getElementById('trendAggSelect').addEventListener('change', function() {{
             renderTrendPlot();
         }});
         // Theme toggle

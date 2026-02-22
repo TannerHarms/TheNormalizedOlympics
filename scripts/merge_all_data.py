@@ -82,18 +82,16 @@ def merge_all_data(olympic_df, wb_df, hdi_df, climate_df, education_df, season):
     olympic_df = olympic_df.copy()
     olympic_df['WB_Code'] = olympic_df['Country'].map(get_wb_code)
     
-    # Count unmapped countries
+    # Count unmapped countries (historical/dissolved nations)
     unmapped = olympic_df[olympic_df['WB_Code'].isna()]
     if len(unmapped) > 0:
-        print(f"  ⚠ {len(unmapped)} records with unmapped country codes:")
-        for country in unmapped['Country'].unique()[:10]:
+        print(f"  ℹ {len(unmapped)} records from historical/dissolved nations (no WB mapping):")
+        for country in sorted(unmapped['Country'].unique())[:15]:
             print(f"    {country}")
-        if len(unmapped['Country'].unique()) > 10:
-            print(f"    ... and {len(unmapped['Country'].unique()) - 10} more")
+        if len(unmapped['Country'].unique()) > 15:
+            print(f"    ... and {len(unmapped['Country'].unique()) - 15} more")
+        print(f"  → Keeping these rows; normalization metrics will be NaN for them.")
         print()
-    
-    # Remove unmapped
-    olympic_df = olympic_df[olympic_df['WB_Code'].notna()]
     
     # Merge with World Bank data
     merged = olympic_df.merge(

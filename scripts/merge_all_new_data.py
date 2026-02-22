@@ -150,6 +150,110 @@ def merge_for_season(season: str, metrics_file: str):
         print(f"    {year}: Added {len(new_rows)} country rows (new year)")
     
     # ===================================================================
+    # STEP 2b: Refresh time-series normalization data for ALL years
+    # ===================================================================
+    # The carry-forward in Step 2 (and the original pipeline for 2018/2022)
+    # may have stale values.  Re-join authoritative time-series data using
+    # the closest available year (prefer exact match, else nearest prior).
+    print(f"\n  Refreshing time-series normalization data for all years...")
+    
+    # Define each time-series data source: (file, join_cols, value_cols)
+    TS_SOURCES = [
+        ("world_bank_data.csv",          ["WB_Code", "Year"], ["Population", "GDP", "GDP_per_capita"]),
+        ("additional_world_bank_data.csv",["WB_Code", "Year"], [
+            "Land_Area_SqKm", "Surface_Area_SqKm", "Internet_Users_Pct",
+            "Vehicles_Per_1000", "Healthcare_Spending_Pct_GDP",
+            "Healthcare_Spending_Per_Capita_USD", "Life_Expectancy_Years",
+            "Labor_Force_Total",
+        ]),
+        ("hdi_data.csv",                  ["WB_Code", "Year"], ["HDI"]),
+        ("military_data.csv",             ["WB_Code", "Year"], [
+            "Military_Expenditure_Pct_GDP", "Active_Military_Personnel_Thousands",
+        ]),
+        ("work_hours_data.csv",           ["WB_Code", "Year"], ["Avg_Work_Hours_Per_Year"]),
+        ("education_spending.csv",        ["WB_Code", "Year"], ["Education_Spending_pct_GDP"]),
+    ]
+    
+    olympic_years = sorted(df["Year"].unique())
+    
+    for src_file, join_keys, value_cols in TS_SOURCES:
+        src_path = DATA_DIR / src_file
+        if not src_path.exists():
+            print(f"    SKIP {src_file} — not found")
+            continue
+        
+        src = pd.read_csv(src_path)
+        src["Year"] = src["Year"].astype(int)
+        
+        # Only keep columns we need (avoid pulling in extra cols like
+        # Active_Military_Personnel which may duplicate)
+        keep = [k for k in join_keys] + [c for c in value_cols if c in src.columns]
+        src = src[keep].copy()
+        
+        # For each value column, do a per-country nearest-year merge
+        
+        for vcol in value_cols:
+            if vcol not in src.columns:
+                continue
+            if vcol not in df.columns:
+                df[vcol] = np.nan
+            
+            # Drop rows where this column is NaN so year-mapping only
+            # considers years that actually have data for each country
+            src_valid = src[src[vcol].notna()][["WB_Code", "Year", vcol]].copy()
+            
+            # Per-country nearest-year merge: for each (WB_Code, OlympicYear),
+            # find the source year with actual data closest to OlympicYear
+            # (prefer exact, then nearest prior, then nearest future)
+            wb_codes = df["WB_Code"].dropna().unique()
+            lookup_rows = []
+            for wbc in wb_codes:
+                country_src = src_valid[src_valid["WB_Code"] == wbc]
+                if country_src.empty:
+                    continue
+                country_years = sorted(country_src["Year"].unique())
+                for oy in olympic_years:
+                    if oy in country_years:
+                        best_year = oy
+                    else:
+                        prior = [y for y in country_years if y <= oy]
+                        if prior:
+                            best_year = max(prior)
+                        else:
+                            future = [y for y in country_years if y > oy]
+                            best_year = min(future) if future else None
+                    if best_year is None:
+                        continue
+                    val = country_src.loc[country_src["Year"] == best_year, vcol].iloc[0]
+                    lookup_rows.append({"WB_Code": wbc, "Year": oy, f"_new_{vcol}": val})
+            
+            if not lookup_rows:
+                continue
+            lookup = pd.DataFrame(lookup_rows)
+            
+            # Merge and overwrite
+            df = df.merge(lookup, on=["WB_Code", "Year"], how="left")
+            mask = df[f"_new_{vcol}"].notna()
+            df.loc[mask, vcol] = df.loc[mask, f"_new_{vcol}"]
+            df.drop(columns=[f"_new_{vcol}"], inplace=True)
+        
+        print(f"    ✓ {src_file}: refreshed {value_cols}")
+    
+    # Also recompute derived spending columns that depend on refreshed data
+    if "Healthcare_Spending_Per_Capita_USD" in df.columns and "Population" in df.columns:
+        df["Healthcare_Spending_USD"] = pd.to_numeric(
+            df["Healthcare_Spending_Per_Capita_USD"], errors="coerce"
+        ) * pd.to_numeric(df["Population"], errors="coerce")
+    if "GDP" in df.columns and "Military_Expenditure_Pct_GDP" in df.columns:
+        df["Military_Expenditure_USD"] = pd.to_numeric(
+            df["GDP"], errors="coerce"
+        ) * (pd.to_numeric(df["Military_Expenditure_Pct_GDP"], errors="coerce") / 100)
+    if "GDP" in df.columns and "Education_Spending_pct_GDP" in df.columns:
+        df["Education_Spending_USD"] = pd.to_numeric(
+            df["GDP"], errors="coerce"
+        ) * (pd.to_numeric(df["Education_Spending_pct_GDP"], errors="coerce") / 100)
+    
+    # ===================================================================
     # STEP 3: Merge historical medal columns from with_history
     # ===================================================================
     # with_history CSVs are computed from the FULL by_year data (back to

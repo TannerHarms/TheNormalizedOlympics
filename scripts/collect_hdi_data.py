@@ -36,7 +36,7 @@ def fetch_hdi_data():
     
     # UNDP provides a direct CSV download with complete time series
     # This is the most recent complete dataset
-    url = "https://hdr.undp.org/sites/default/files/2021-22_HDR/HDR21-22_Composite_indices_complete_time_series.csv"
+    url = "https://hdr.undp.org/sites/default/files/2025_HDR/HDR25_Composite_indices_complete_time_series.csv"
     
     print(f"Fetching HDI data from UNDP...")
     print(f"URL: {url}")
@@ -57,8 +57,16 @@ def fetch_hdi_data():
         print(f"  Saved to: {raw_path}")
         print()
         
-        # Read and process the CSV
-        df = pd.read_csv(raw_path)
+        # Read and process the CSV (try multiple encodings)
+        for enc in ['utf-8', 'latin-1', 'cp1252', 'utf-8-sig']:
+            try:
+                df = pd.read_csv(raw_path, encoding=enc)
+                print(f"Read CSV with encoding: {enc}")
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        else:
+            raise ValueError("Could not decode HDI CSV with any known encoding")
         
         print(f"Raw data shape: {df.shape}")
         print(f"Columns: {list(df.columns)[:10]}...")  # Show first 10 columns

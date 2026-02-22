@@ -44,7 +44,7 @@ def collect_work_hours_data():
         "https://sdmx.oecd.org/public/rest/data/"
         "OECD.ELS.SAE,DSD_HW@DF_AVG_ANN_HRS_WKD,/"
         ".............A"  # 13 dots + A for annual frequency at end
-        "?startPeriod=2000&endPeriod=2023"
+        "?startPeriod=2000&endPeriod=2026"
     )
     
     headers = {'Accept': 'application/vnd.sdmx.data+json'}

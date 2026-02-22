@@ -30,48 +30,77 @@ Data sources:
 
 import pandas as pd
 import requests
+import requests.adapters
+import requests.packages.urllib3.util.retry
 import time
 from pathlib import Path
 
 # World Bank API base
 WB_BASE_URL = "https://api.worldbank.org/v2"
 
+# Retry-capable session (solves SSL hangs)
+session = requests.Session()
+_adapter = requests.adapters.HTTPAdapter(
+    max_retries=requests.packages.urllib3.util.retry.Retry(
+        total=5, backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+)
+session.mount('https://', _adapter)
+session.mount('http://', _adapter)
+
 # Load existing country codes
 data_dir = Path(__file__).parent.parent / "data"
 world_bank_data = pd.read_csv(data_dir / "world_bank_data.csv")
-country_codes = world_bank_data['WB_Code'].unique()
+country_codes = set(world_bank_data['WB_Code'].unique())
 
 def fetch_world_bank_indicator(indicator_code, indicator_name):
-    """Fetch data from World Bank API for a specific indicator."""
+    """Fetch data from World Bank API for a specific indicator using bulk API."""
     print(f"\nFetching {indicator_name} ({indicator_code})...")
     
     all_data = []
+    page = 1
+    total_pages = 1
     
-    for country in country_codes:
-        url = f"{WB_BASE_URL}/country/{country}/indicator/{indicator_code}"
+    while page <= total_pages:
+        url = f"{WB_BASE_URL}/country/all/indicator/{indicator_code}"
         params = {
             'format': 'json',
-            'per_page': 100,
-            'date': '1960:2024'
+            'per_page': 10000,
+            'date': '1960:2026',
+            'page': page
         }
         
-        try:
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                data = response.json()
-                if len(data) > 1 and data[1]:
-                    for record in data[1]:
-                        all_data.append({
-                            'WB_Code': country,
-                            'Year': record['date'],
-                            indicator_name: record['value']
-                        })
-            time.sleep(0.1)  # Rate limiting
-        except Exception as e:
-            print(f"Error fetching {country}: {e}")
+        for attempt in range(5):
+            try:
+                response = session.get(url, params=params, timeout=(10, 60))
+                if response.status_code == 200:
+                    data = response.json()
+                    if len(data) > 1 and data[1]:
+                        # Get total pages from metadata
+                        total_pages = data[0].get('pages', 1)
+                        for record in data[1]:
+                            country = record.get('countryiso3code', '')
+                            if country in country_codes and record['value'] is not None:
+                                all_data.append({
+                                    'WB_Code': country,
+                                    'Year': record['date'],
+                                    indicator_name: record['value']
+                                })
+                    print(f"  Page {page}/{total_pages} OK ({len(all_data)} records so far)")
+                break
+            except Exception as e:
+                if attempt < 4:
+                    wait = 2 ** attempt
+                    print(f"  Retry {attempt+1} page {page}: {e} (wait {wait}s)")
+                    time.sleep(wait)
+                else:
+                    print(f"  FAILED page {page}: {e}")
+        page += 1
+        time.sleep(0.5)
     
     df = pd.DataFrame(all_data)
-    print(f"Collected {len(df)} records for {indicator_name}")
+    print(f"  Collected {len(df)} records for {indicator_name}")
     return df
 
 def collect_world_bank_metrics():

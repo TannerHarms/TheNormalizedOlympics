@@ -16,49 +16,70 @@ import time
 sys.path.append(str(Path(__file__).parent.parent))
 from scripts.country_mapping import NOC_TO_WB
 
-def fetch_indicator_data(country_code, indicator, start_year=1960, end_year=2023):
+# Retry-capable session
+_session = requests.Session()
+_adapter = requests.adapters.HTTPAdapter(
+    max_retries=requests.packages.urllib3.util.retry.Retry(
+        total=5, backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+)
+_session.mount('https://', _adapter)
+_session.mount('http://', _adapter)
+
+def fetch_indicator_data(country_code, indicator, start_year=1960, end_year=2026):
+    """Legacy per-country fetch — kept for compatibility but unused."""
+    pass
+
+
+def fetch_all_bulk(indicator, wb_countries, start_year=1960, end_year=2026):
     """
-    Fetch a single indicator for a country from World Bank API.
-    
-    Args:
-        country_code: ISO3 country code
-        indicator: World Bank indicator code
-        start_year: Start year
-        end_year: End year
-    
-    Returns:
-        List of {year, value} dicts
+    Fetch a WB indicator for ALL countries in one bulk API call.
+    Much faster and more reliable than per-country fetching.
     """
-    url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator}"
-    params = {
-        'date': f'{start_year}:{end_year}',
-        'format': 'json',
-        'per_page': 1000
-    }
+    wb_set = set(wb_countries)
+    all_data = []
+    page = 1
+    total_pages = 1
     
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
+    while page <= total_pages:
+        url = f"https://api.worldbank.org/v2/country/all/indicator/{indicator}"
+        params = {
+            'date': f'{start_year}:{end_year}',
+            'format': 'json',
+            'per_page': 10000,
+            'page': page
+        }
         
-        data = response.json()
-        
-        if len(data) < 2:
-            return []
-        
-        records = data[1] if isinstance(data, list) and len(data) > 1 else []
-        
-        result = []
-        for record in records:
-            if record.get('value') is not None:
-                result.append({
-                    'year': int(record['date']),
-                    'value': float(record['value'])
-                })
-        
-        return result
-        
-    except Exception as e:
-        return []
+        for attempt in range(5):
+            try:
+                response = _session.get(url, params=params, timeout=(10, 60))
+                response.raise_for_status()
+                data = response.json()
+                
+                if len(data) > 1 and data[1]:
+                    total_pages = data[0].get('pages', 1)
+                    for record in data[1]:
+                        country = record.get('countryiso3code', '')
+                        if country in wb_set and record.get('value') is not None:
+                            all_data.append({
+                                'WB_Code': country,
+                                'Year': int(record['date']),
+                                'Education_Spending_pct_GDP': float(record['value'])
+                            })
+                print(f"  Page {page}/{total_pages} OK ({len(all_data)} records)")
+                break
+            except Exception as e:
+                if attempt < 4:
+                    wait = 2 ** attempt
+                    print(f"  Retry {attempt+1} page {page}: {e} (wait {wait}s)")
+                    time.sleep(wait)
+                else:
+                    print(f"  FAILED page {page}: {e}")
+        page += 1
+        time.sleep(0.5)
+    
+    return all_data
 
 
 def main():
@@ -99,33 +120,13 @@ def main():
     indicator = 'SE.XPD.TOTL.GD.ZS'  # Government expenditure on education (% of GDP)
     
     print(f"Indicator: {indicator}")
-    print(f"Period: 1960-2024")
-    print(f"Fetching data for {len(wb_countries)} countries...")
+    print(f"Period: 1960-2026")
+    print(f"Fetching bulk data for {len(wb_countries)} countries...")
     print()
     
-    all_data = []
-    success_count = 0
+    all_data = fetch_all_bulk(indicator, wb_countries)
     
-    for i, country in enumerate(wb_countries, 1):
-        print(f"  [{i}/{len(wb_countries)}] Fetching {country}...", end=' ')
-        
-        records = fetch_indicator_data(country, indicator)
-        
-        if records:
-            for record in records:
-                all_data.append({
-                    'WB_Code': country,
-                    'Year': record['year'],
-                    'Education_Spending_pct_GDP': record['value']
-                })
-            success_count += 1
-            print(f"✓ ({len(records)} records)")
-        else:
-            print("✗ (no data)")
-        
-        # Rate limiting
-        time.sleep(0.1)
-    
+    success_count = len(set(r['WB_Code'] for r in all_data))
     print()
     print(f"✓ Successfully fetched data for {success_count}/{len(wb_countries)} countries")
     print()

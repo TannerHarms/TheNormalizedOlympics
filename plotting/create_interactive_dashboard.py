@@ -1010,6 +1010,72 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
         .footer a:hover {{
             opacity: 0.7;
         }}
+        /* Data Sources collapsible */
+        .data-sources {{
+            margin-top: 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-style: normal;
+        }}
+        .data-sources summary {{
+            cursor: pointer;
+            padding: 8px 14px;
+            font-weight: bold;
+            font-size: 13px;
+            color: var(--fg);
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            list-style: none;
+            user-select: none;
+        }}
+        .data-sources summary::-webkit-details-marker {{ display: none; }}
+        .data-sources summary::before {{
+            content: '\\25B6\\FE0E';
+            display: inline-block;
+            margin-right: 8px;
+            font-size: 11px;
+            transition: transform 0.2s;
+        }}
+        .data-sources[open] summary::before {{
+            transform: rotate(90deg);
+        }}
+        .data-sources .ds-body {{
+            padding: 14px 18px;
+            font-size: 12px;
+            line-height: 1.7;
+            color: var(--fg);
+        }}
+        .data-sources .ds-body h3 {{
+            font-size: 14px;
+            margin: 14px 0 6px 0;
+            color: var(--fg);
+        }}
+        .data-sources .ds-body h3:first-child {{ margin-top: 0; }}
+        .data-sources .ds-body table {{
+            border-collapse: collapse;
+            width: 100%;
+            margin: 6px 0 10px 0;
+            font-size: 11.5px;
+        }}
+        .data-sources .ds-body th,
+        .data-sources .ds-body td {{
+            text-align: left;
+            padding: 4px 10px;
+            border-bottom: 1px solid var(--border);
+        }}
+        .data-sources .ds-body th {{
+            font-weight: bold;
+            background: var(--bg-secondary);
+        }}
+        .data-sources .ds-body ul {{
+            margin: 4px 0 10px 0;
+            padding-left: 20px;
+        }}
+        .data-sources .ds-body li {{ margin-bottom: 3px; }}
+        .data-sources .ds-body a {{
+            color: var(--ctx-label);
+            text-decoration: underline;
+        }}
     </style>
 </head>
 <body>
@@ -1087,6 +1153,59 @@ def create_html_dashboard(all_data, medal_types, norm_metrics, summer_years, win
             Prepared by <a href="https://substack.com/@tannerharms" target="_blank">Tanner D. Harms</a>, {datetime.now().strftime('%B %d, %Y')}.
             <a href="https://github.com/TannerHarms/TheNormalizedOlympics" target="_blank">View on GitHub</a>.<br><br>
             <span style="font-size:10px; color:var(--disclaimer-color);">Disclaimer: This visualization is provided for informational and educational purposes only. The data is aggregated from publicly available sources and may contain errors, omissions, or inaccuracies. No warranty, express or implied, is made regarding the accuracy, completeness, or reliability of the information presented. The author assumes no liability for any decisions, actions, or consequences arising from the use or interpretation of this content. This is not an official publication of the International Olympic Committee or any affiliated organization.</span>
+
+            <details class="data-sources">
+                <summary>Data Sources &amp; Methodology</summary>
+                <div class="ds-body">
+                    <h3>Olympic Medal Data</h3>
+                    <table>
+                        <tr><th>Source</th><th>Coverage</th><th>Notes</th></tr>
+                        <tr><td><a href="https://www.kaggle.com/datasets/heesoo37/120-years-of-olympic-history-athletes-and-results" target="_blank">Kaggle: 120 Years of Olympic History</a></td><td>1896&ndash;2016</td><td>271,116 athlete records (CC0: Public Domain)</td></tr>
+                        <tr><td><a href="https://www.olympedia.org/" target="_blank">Olympedia.org</a></td><td>2018&ndash;2026</td><td>Direct scrape of per-country results; cross-checked against official medal tables</td></tr>
+                    </table>
+                    <p>Medals are deduplicated: team events count once per country, not per athlete. Metrics include total athletes sent, individual medalists, event-level medals, and athlete-level medals awarded.</p>
+
+                    <h3>Normalization Indicators (Time-Series)</h3>
+                    <table>
+                        <tr><th>Indicator</th><th>Source</th><th>Coverage</th></tr>
+                        <tr><td>Population, GDP, GDP per Capita</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank API</a> (CC-BY 4.0)</td><td>1960&ndash;2024, 125 countries</td></tr>
+                        <tr><td>Internet Users, Vehicles/1000, Healthcare, Life Expectancy, Labor Force, Land/Surface Area</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank API</a></td><td>1960&ndash;2024 (varies)</td></tr>
+                        <tr><td>Human Development Index (HDI)</td><td><a href="https://hdr.undp.org/" target="_blank">UNDP HDR</a> (CC-BY 3.0 IGO)</td><td>1990&ndash;2023</td></tr>
+                        <tr><td>Military Expenditure &amp; Personnel</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank</a> (SIPRI/IISS)</td><td>2000&ndash;2023</td></tr>
+                        <tr><td>Average Work Hours</td><td><a href="https://data-explorer.oecd.org/" target="_blank">OECD SDMX API</a></td><td>2000&ndash;2023, 45 countries</td></tr>
+                        <tr><td>Education Spending (% GDP)</td><td><a href="https://data.worldbank.org/" target="_blank">World Bank</a></td><td>1970&ndash;2023 (sparse)</td></tr>
+                    </table>
+
+                    <h3>Normalization Indicators (Static/Snapshot)</h3>
+                    <table>
+                        <tr><th>Indicator</th><th>Source</th><th>Notes</th></tr>
+                        <tr><td>Coastline Length, Average Elevation</td><td>CIA World Factbook, Wikipedia</td><td>85 countries</td></tr>
+                        <tr><td>Avg Temperature, Snowfall, Sunshine Days</td><td>World Bank Climate Portal</td><td>53 countries; national averages</td></tr>
+                        <tr><td>Universities, Ski Resorts, Stadiums</td><td>UNESCO, manual compilation</td><td>54 countries; 2024 snapshot</td></tr>
+                        <tr><td>Global Peace Index</td><td><a href="https://www.visionofhumanity.org/" target="_blank">IEP</a></td><td>GPI 2024; 47 countries</td></tr>
+                        <tr><td>Refugees Received/Produced</td><td><a href="https://www.unhcr.org/refugee-statistics/" target="_blank">UNHCR</a></td><td>2023 snapshot; 66 countries</td></tr>
+                    </table>
+
+                    <h3>Methodology</h3>
+                    <ul>
+                        <li><strong>Year matching:</strong> Each Olympic edition is matched to the nearest available year for each country and indicator. For example, 2026 Winter Olympics uses 2024 population data where 2026 is unavailable.</li>
+                        <li><strong>Normalization formula:</strong> Medals (or athletes) divided by the selected denominator. For per-capita metrics, results are scaled for readability (e.g., medals per million people).</li>
+                        <li><strong>Historical countries:</strong> Soviet Union, Yugoslavia, etc. are mapped to modern successor states using contemporary economic data.</li>
+                        <li><strong>Coverage gaps:</strong> Smaller nations often lack data for niche metrics. Coverage ranges from ~24% (ski resorts) to ~99% (population).</li>
+                        <li><strong>GDP is in current US dollars,</strong> not PPP or inflation-adjusted.</li>
+                    </ul>
+
+                    <h3>Data Limitations</h3>
+                    <ul>
+                        <li>Snapshot metrics (refugees, peace index, consumption) are applied uniformly across all Olympic years.</li>
+                        <li>OECD work-hours data covers only 45 member/partner countries; no data for China, India, or most African nations.</li>
+                        <li>Climate and geographic values are national approximations; large countries have wide regional variation.</li>
+                        <li>Vehicles per 1000 has very sparse coverage (~2% for recent years).</li>
+                    </ul>
+
+                    <p style="margin-top:12px;">Full documentation and all collection scripts are available in the <a href="https://github.com/TannerHarms/TheNormalizedOlympics" target="_blank">GitHub repository</a>.</p>
+                </div>
+            </details>
         </div>
     </div>
     

@@ -28,7 +28,18 @@ INDICATORS = {
 # World Bank API base URL
 WB_API_BASE = "https://api.worldbank.org/v2/country/{country}/indicator/{indicator}"
 
-def fetch_indicator_data(country_code, indicator_code, start_year=1960, end_year=2024):
+# Retry-capable session
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(
+    max_retries=requests.packages.urllib3.util.retry.Retry(
+        total=5, backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+)
+session.mount('https://', adapter)
+session.mount('http://', adapter)
+
+def fetch_indicator_data(country_code, indicator_code, start_year=1960, end_year=2026):
     """
     Fetch a single indicator for a country from World Bank API.
     
@@ -43,7 +54,7 @@ def fetch_indicator_data(country_code, indicator_code, start_year=1960, end_year
     }
     
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = session.get(url, params=params, timeout=(10, 30))
         response.raise_for_status()
         
         data = response.json()
@@ -68,7 +79,7 @@ def fetch_indicator_data(country_code, indicator_code, start_year=1960, end_year
         return None
 
 
-def fetch_world_bank_data(countries, indicators, start_year=1960, end_year=2024):
+def fetch_world_bank_data(countries, indicators, start_year=1960, end_year=2026):
     """
     Fetch World Bank data for multiple countries and indicators.
     
@@ -183,7 +194,7 @@ def main():
     print("FETCHING DATA FROM WORLD BANK API")
     print("-"*70)
     
-    df = fetch_world_bank_data(wb_codes, INDICATORS, start_year=1960, end_year=2024)
+    df = fetch_world_bank_data(wb_codes, INDICATORS, start_year=1960, end_year=2026)
     
     if df.empty:
         print("\n✗ No data collected. Exiting.")

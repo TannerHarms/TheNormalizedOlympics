@@ -30,46 +30,60 @@ country_codes = world_bank_data['WB_Code'].unique()
 
 # Retry-capable session
 session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(max_retries=3)
+adapter = requests.adapters.HTTPAdapter(
+    max_retries=requests.packages.urllib3.util.retry.Retry(
+        total=5, backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+)
 session.mount('https://', adapter)
+session.mount('http://', adapter)
 
 
-def fetch_wb_indicator(indicator_code, indicator_name, start_year=2000, end_year=2023):
-    """Fetch a World Bank indicator for all countries as a time series."""
+def fetch_wb_indicator(indicator_code, indicator_name, start_year=2000, end_year=2026):
+    """Fetch a World Bank indicator for all countries via bulk API."""
     print(f"\nFetching {indicator_name} ({indicator_code})...")
     
+    country_set = set(country_codes)
     all_data = []
-    errors = 0
+    page = 1
+    total_pages = 1
     
-    for i, country in enumerate(country_codes):
-        try:
-            url = f"{WB_BASE_URL}/country/{country}/indicator/{indicator_code}"
-            params = {
-                'format': 'json',
-                'per_page': 100,
-                'date': f'{start_year}:{end_year}'
-            }
-            
-            response = session.get(url, params=params, timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                if len(data) > 1 and data[1]:
-                    for record in data[1]:
-                        if record['value'] is not None:
-                            all_data.append({
-                                'WB_Code': country,
-                                'Year': int(record['date']),
-                                indicator_name: record['value']
-                            })
-            time.sleep(0.1)  # Rate limiting
-        except Exception as e:
-            errors += 1
-            if errors <= 5:
-                print(f"  Error fetching {country}: {e}")
-            time.sleep(0.5)
+    while page <= total_pages:
+        url = f"{WB_BASE_URL}/country/all/indicator/{indicator_code}"
+        params = {
+            'format': 'json',
+            'per_page': 10000,
+            'date': f'{start_year}:{end_year}',
+            'page': page
+        }
         
-        if (i + 1) % 25 == 0:
-            print(f"  Progress: {i + 1}/{len(country_codes)} countries...")
+        for attempt in range(5):
+            try:
+                response = session.get(url, params=params, timeout=(10, 60))
+                if response.status_code == 200:
+                    data = response.json()
+                    if len(data) > 1 and data[1]:
+                        total_pages = data[0].get('pages', 1)
+                        for record in data[1]:
+                            country = record.get('countryiso3code', '')
+                            if country in country_set and record['value'] is not None:
+                                all_data.append({
+                                    'WB_Code': country,
+                                    'Year': int(record['date']),
+                                    indicator_name: record['value']
+                                })
+                    print(f"  Page {page}/{total_pages} OK ({len(all_data)} records)")
+                break
+            except Exception as e:
+                if attempt < 4:
+                    wait = 2 ** attempt
+                    print(f"  Retry {attempt+1} page {page}: {e} (wait {wait}s)")
+                    time.sleep(wait)
+                else:
+                    print(f"  FAILED page {page}: {e}")
+        page += 1
+        time.sleep(0.5)
     
     df = pd.DataFrame(all_data)
     if not df.empty:
@@ -78,9 +92,6 @@ def fetch_wb_indicator(indicator_code, indicator_name, start_year=2000, end_year
         print(f"  ✓ {len(df)} records, {countries_with_data} countries, years {year_range}")
     else:
         print(f"  ✗ No data returned")
-    
-    if errors > 0:
-        print(f"  ⚠ {errors} errors during fetch")
     
     return df
 
